@@ -30,17 +30,19 @@ class Investigator:
         evidence: list[Evidence] = []
         scratch = ""
         for _ in range(self._max_steps):
-            out = self._llm.complete(
+            raw = self._llm.complete(
                 REACT_PROMPT.format(question=question, feedback=feedback or "ninguna", scratch=scratch)
             ).strip()
+            # El modelo puede inventar su propia Observation. Solo el sistema escribe observaciones,
+            # así que se descarta todo lo que venga después de la primera Observation del modelo.
+            out = raw.split("Observation:", 1)[0].strip()
             scratch += out + "\n"
-
-            final = FINAL_RE.search(out)
-            if final:
-                return Report(question, final.group(1).strip(), tuple(evidence))
 
             action = ACTION_RE.search(out)
             if action is None:
+                final = FINAL_RE.search(out)
+                if final:
+                    return Report(question, final.group(1).strip(), tuple(evidence))
                 scratch += "Observation: formato no válido. Usa Action o Final.\n"
                 continue
 

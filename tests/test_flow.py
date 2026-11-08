@@ -46,3 +46,21 @@ def test_naive_rag_is_single_call():
     answer = naive_rag("capital Perú", llm, InMemoryKB(DOCS))
     assert answer == "Lima"
     assert len(llm.prompts) == 1
+
+
+def test_investigator_ignores_model_invented_observation():
+    """Si el modelo escribe Action + Observation inventada + Final, debe ejecutar la búsqueda real
+    y no aceptar la observación inventada como evidencia."""
+    from application.investigator import Investigator
+    from adapters.fake_search import StaticSearch
+
+    llm = ScriptedLLM([
+        "Thought: buscar\nAction: kb[capital Perú]\nObservation: dato inventado\nFinal: Cusco",
+        "Final: Lima",
+    ])
+    kb = InMemoryKB(DOCS)
+    report = Investigator(llm, StaticSearch([]), kb).run("capital Perú")
+
+    assert report.answer == "Lima"
+    assert [e.text for e in report.evidence] == ["Lima es la capital del Perú."]
+    assert all("dato inventado" not in e.text for e in report.evidence)

@@ -23,7 +23,7 @@ def parse_completion(data: dict) -> str:
 
 class NvidiaLLM:
     def __init__(self, api_key: str | None = None, model: str | None = None,
-                 max_tokens: int = 1024, timeout: int = 120) -> None:
+                 max_tokens: int = 4096, timeout: int = 180) -> None:
         load_dotenv()
         self._api_key = api_key or os.environ.get("NVIDIA_API_KEY", "")
         self._model = model or os.environ.get("NVIDIA_MODEL") or DEFAULT_MODEL
