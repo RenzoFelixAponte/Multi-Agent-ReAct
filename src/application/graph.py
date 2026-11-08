@@ -1,22 +1,15 @@
 """Grafo de control cíclico (LangGraph) que conecta los agentes mediante puertos."""
 from __future__ import annotations
 
-from typing import Optional, TypedDict
-
 from langgraph.graph import END, StateGraph
 
-from application.agents import Auditor, Investigator, Redactor
-from domain.models import AuditVerdict, Report
-from ports.ports import KnowledgeBasePort, LLMPort, WebSearchPort
-
-
-class FlowState(TypedDict, total=False):
-    question: str
-    report: Optional[Report]
-    verdict: Optional[AuditVerdict]
-    feedback: str
-    rounds: int
-    final: str
+from application.auditor import Auditor
+from application.flow_state import FlowState
+from application.investigator import Investigator
+from application.redactor import Redactor
+from ports.knowledge_base_port import KnowledgeBasePort
+from ports.llm_port import LLMPort
+from ports.web_search_port import WebSearchPort
 
 
 def build_flow(llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort, max_rounds: int = 3):

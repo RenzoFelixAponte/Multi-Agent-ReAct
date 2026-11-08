@@ -4,10 +4,14 @@
 
 ```
 src/
-├── domain/        # modelos puros (Evidence, Report, BenchmarkItem, AuditVerdict)
-├── ports/         # contratos: LLMPort, WebSearchPort, KnowledgeBasePort, DatasetPort
-├── application/   # núcleo: agentes ReAct, Auditor, Redactor, grafo LangGraph, Naive RAG
-└── adapters/      # fakes (tests), real (Mistral 4-bit, DuckDuckGo, ChromaDB), hf_datasets
+├── domain/        # entidades puras, una por archivo: Evidence, Report, BenchmarkItem, AuditVerdict
+├── ports/         # contratos (Protocol), uno por archivo: LLMPort, WebSearchPort, KnowledgeBasePort, DatasetPort
+├── application/   # núcleo: Investigator, Auditor, Redactor, FlowState, build_flow, naive_rag
+│                  #   prompts.py y formatting.py tienen las plantillas y el formato, sin lógica
+└── adapters/      # implementaciones, una clase por archivo:
+                   #   reales: MistralLocalLLM, NvidiaLLM, DuckDuckGoSearch, ChromaKB, HFDatasetAdapter
+                   #   falsas (pruebas): ScriptedLLM, StaticSearch, InMemoryKB
+                   #   utilidades: dotenv_loader, hf_mappers
 tests/             # pruebas offline con adaptadores falsos
 ```
 

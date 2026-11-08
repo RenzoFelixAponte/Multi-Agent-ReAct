@@ -1,14 +1,9 @@
 """Baseline de comparación: RAG tradicional de un solo paso, sin agentes ni auditoría."""
 from __future__ import annotations
 
-from ports.ports import KnowledgeBasePort, LLMPort
-
-NAIVE_PROMPT = """Responde usando solo el contexto.
-Contexto:
-{context}
-
-Pregunta: {question}
-Respuesta:"""
+from application.prompts import NAIVE_PROMPT
+from ports.knowledge_base_port import KnowledgeBasePort
+from ports.llm_port import LLMPort
 
 
 def naive_rag(question: str, llm: LLMPort, kb: KnowledgeBasePort, k: int = 3) -> str:

@@ -1,7 +1,9 @@
-from adapters.fakes import InMemoryKB, ScriptedLLM, StaticSearch
+from adapters.fake_llm import ScriptedLLM
+from adapters.fake_search import StaticSearch
+from adapters.in_memory_kb import InMemoryKB
 from application.graph import build_flow
 from application.naive_rag import naive_rag
-from domain.models import Evidence
+from domain.evidence import Evidence
 
 DOCS = [Evidence("wiki", "Lima es la capital del Perú.")]
 

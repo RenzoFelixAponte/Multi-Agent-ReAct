@@ -1,21 +1,11 @@
-"""Adaptador de datasets de Hugging Face (WikiQA, GSM8K, MBPP).
-
-Los mapeadores de filas son funciones puras y se prueban sin red.
-`HFDatasetAdapter` es la única parte que descarga datos.
-"""
+"""Mapeadores puros de filas de Hugging Face a BenchmarkItem. No hacen red."""
 from __future__ import annotations
 
 import re
 from typing import Any, Callable
 
-from domain.models import BenchmarkItem, Evidence
-
-# nombre lógico -> (id en Hugging Face, configuración, split por defecto)
-DATASET_SPECS: dict[str, tuple[str, str | None]] = {
-    "wiki_qa": ("microsoft/wiki_qa", None),
-    "gsm8k": ("openai/gsm8k", "main"),
-    "mbpp": ("google-research-datasets/mbpp", "full"),
-}
+from domain.benchmark_item import BenchmarkItem
+from domain.evidence import Evidence
 
 _GSM8K_FINAL = re.compile(r"####\s*(.+)$")
 
@@ -77,20 +67,6 @@ def map_rows(name: str, rows: list[dict[str, Any]], limit: int) -> list[Benchmar
         if len(items) >= limit:
             break
     return items
-
-
-class HFDatasetAdapter:
-    """Implementa DatasetPort descargando desde Hugging Face con la librería `datasets`."""
-
-    def load(self, name: str, split: str, limit: int) -> list[BenchmarkItem]:
-        if name not in DATASET_SPECS:
-            raise ValueError(f"dataset desconocido: {name}. Válidos: {sorted(DATASET_SPECS)}")
-        from datasets import load_dataset
-
-        hf_id, config = DATASET_SPECS[name]
-        ds = load_dataset(hf_id, config, split=split)
-        # Se recorre todo el split hasta reunir `limit` items válidos (algunas filas se descartan)
-        return map_rows(name, [dict(r) for r in ds], limit)
 
 
 def wikiqa_documents(items: list[BenchmarkItem]) -> list[Evidence]:

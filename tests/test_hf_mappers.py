@@ -1,5 +1,5 @@
-from adapters.hf_datasets import map_gsm8k, map_mbpp, map_rows, map_wikiqa, wikiqa_documents
-from domain.models import Evidence
+from adapters.hf_mappers import map_gsm8k, map_mbpp, map_rows, map_wikiqa, wikiqa_documents
+from domain.evidence import Evidence
 
 
 def test_wikiqa_keeps_only_positive_candidates():
