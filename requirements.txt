@@ -1,0 +1,6 @@
+langgraph>=0.2
+pytest>=8
+# Adaptadores reales (instalar en Colab):
+# transformers, accelerate, bitsandbytes, torch
+# chromadb
+# ddgs
