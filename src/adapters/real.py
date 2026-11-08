@@ -4,7 +4,7 @@ Pendiente de validar en Colab con T4: MistralLocalLLM y ChromaKB.
 """
 from __future__ import annotations
 
-from proyecto2.domain.models import Evidence
+from domain.models import Evidence
 
 
 class MistralLocalLLM:

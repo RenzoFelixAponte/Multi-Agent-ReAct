@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import re
 
-from proyecto2.domain.models import AuditVerdict, Evidence, Report
-from proyecto2.ports.ports import KnowledgeBasePort, LLMPort, WebSearchPort
+from domain.models import AuditVerdict, Evidence, Report
+from ports.ports import KnowledgeBasePort, LLMPort, WebSearchPort
 
 MAX_REACT_STEPS = 4
 

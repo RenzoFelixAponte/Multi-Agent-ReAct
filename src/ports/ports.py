@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from proyecto2.domain.models import BenchmarkItem, Evidence
+from domain.models import BenchmarkItem, Evidence
 
 
 class LLMPort(Protocol):

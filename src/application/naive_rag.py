@@ -1,7 +1,7 @@
 """Baseline de comparación: RAG tradicional de un solo paso, sin agentes ni auditoría."""
 from __future__ import annotations
 
-from proyecto2.ports.ports import KnowledgeBasePort, LLMPort
+from ports.ports import KnowledgeBasePort, LLMPort
 
 NAIVE_PROMPT = """Responde usando solo el contexto.
 Contexto:

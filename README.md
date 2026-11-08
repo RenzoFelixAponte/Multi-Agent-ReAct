@@ -3,12 +3,12 @@
 ## Estructura
 
 ```
-src/proyecto2/
-├── domain/        # modelos puros (Evidence, Report, AuditVerdict)
-├── ports/         # contratos: LLMPort, WebSearchPort, KnowledgeBasePort
+src/
+├── domain/        # modelos puros (Evidence, Report, BenchmarkItem, AuditVerdict)
+├── ports/         # contratos: LLMPort, WebSearchPort, KnowledgeBasePort, DatasetPort
 ├── application/   # núcleo: agentes ReAct, Auditor, Redactor, grafo LangGraph, Naive RAG
-└── adapters/      # implementaciones: fakes (tests), real (Mistral 4-bit, DuckDuckGo, ChromaDB)
-tests/             # pruebas con adaptadores falsos (sin GPU ni red)
+└── adapters/      # fakes (tests), real (Mistral 4-bit, DuckDuckGo, ChromaDB), hf_datasets
+tests/             # pruebas offline con adaptadores falsos
 ```
 
 El núcleo (`domain` y `application`) solo importa puertos. Cambiar Mistral por otro LLM, o ChromaDB por FAISS, es reemplazar un adaptador.

@@ -1,7 +1,7 @@
 """Adaptadores falsos para pruebas unitarias. No requieren GPU, red ni claves."""
 from __future__ import annotations
 
-from proyecto2.domain.models import Evidence
+from domain.models import Evidence
 
 
 class ScriptedLLM:

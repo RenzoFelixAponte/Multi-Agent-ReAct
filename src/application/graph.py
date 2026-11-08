@@ -5,9 +5,9 @@ from typing import Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
 
-from proyecto2.application.agents import Auditor, Investigator, Redactor
-from proyecto2.domain.models import AuditVerdict, Report
-from proyecto2.ports.ports import KnowledgeBasePort, LLMPort, WebSearchPort
+from application.agents import Auditor, Investigator, Redactor
+from domain.models import AuditVerdict, Report
+from ports.ports import KnowledgeBasePort, LLMPort, WebSearchPort
 
 
 class FlowState(TypedDict, total=False):

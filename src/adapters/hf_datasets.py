@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from proyecto2.domain.models import BenchmarkItem, Evidence
+from domain.models import BenchmarkItem, Evidence
 
 # nombre lógico -> (id en Hugging Face, configuración, split por defecto)
 DATASET_SPECS: dict[str, tuple[str, str | None]] = {
