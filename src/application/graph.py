@@ -1,7 +1,7 @@
 """Grafo de control cíclico (LangGraph) que conecta los agentes mediante puertos."""
 from __future__ import annotations
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, START, StateGraph
 
 from application.auditor import Auditor
 from application.flow_state import FlowState
@@ -14,14 +14,32 @@ from ports.web_search_port import WebSearchPort
 
 
 def build_flow(llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort, max_rounds: int = 3,
-               runner: CodeRunnerPort | None = None, max_steps: int = MAX_REACT_STEPS):
-    """Construye el grafo: investigate -> audit -> (redact | feedback -> investigate | fin)."""
+               runner: CodeRunnerPort | None = None, max_steps: int = MAX_REACT_STEPS,
+               prefetch: bool = False):
+    """Construye el grafo: [kb || web] -> investigate -> audit -> (redact | feedback -> investigate | fin).
+
+    Con `prefetch=True`, kb y web se consultan en paralelo (fan-out de LangGraph) antes de que el
+    Investigador empiece su bucle ReAct, que luego parte con esa evidencia y puede seguir buscando.
+    """
     investigator = Investigator(llm, web, kb, max_steps=max_steps, runner=runner)
     auditor = Auditor(llm)
     redactor = Redactor(llm)
 
+    def kb_lookup(state: FlowState) -> dict:
+        try:
+            return {"prefetched": kb.retrieve(state["question"])}
+        except Exception:  # una rama caída no debe tumbar a la otra
+            return {"prefetched": []}
+
+    def web_lookup(state: FlowState) -> dict:
+        try:
+            return {"prefetched": web.search(state["question"])}
+        except Exception:
+            return {"prefetched": []}
+
     def investigate(state: FlowState) -> dict:
-        report = investigator.run(state["question"], state.get("feedback", ""))
+        report = investigator.run(state["question"], state.get("feedback", ""),
+                                  state.get("prefetched", ()))
         return {"report": report, "rounds": state.get("rounds", 0) + 1}
 
     def audit(state: FlowState) -> dict:
@@ -46,7 +64,14 @@ def build_flow(llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort, max_roun
     graph.add_node("feedback", feedback)
     graph.add_node("redact", redact)
 
-    graph.set_entry_point("investigate")
+    if prefetch:
+        graph.add_node("kb_lookup", kb_lookup)
+        graph.add_node("web_lookup", web_lookup)
+        graph.add_edge(START, "kb_lookup")
+        graph.add_edge(START, "web_lookup")
+        graph.add_edge(["kb_lookup", "web_lookup"], "investigate")  # espera a que terminen ambas
+    else:
+        graph.add_edge(START, "investigate")
     graph.add_edge("investigate", "audit")
     graph.add_conditional_edges(
         "audit", route, {"redact": "redact", "retry": "feedback", "stop": END}

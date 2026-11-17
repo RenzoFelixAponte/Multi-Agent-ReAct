@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from application.answer_checks import extract_code
 from application.calculator import calculate
@@ -48,9 +49,12 @@ class Investigator:
         names = ["kb", "web", "calc"] + (["python"] if runner else [])
         self._tools = "\n".join(f"- {TOOL_DESCRIPTIONS[n]}" for n in names)
 
-    def run(self, question: str, feedback: str = "") -> Report:
-        evidence: list[Evidence] = []
+    def run(self, question: str, feedback: str = "", prefetched: Sequence[Evidence] = ()) -> Report:
+        evidence: list[Evidence] = list(prefetched)
         scratch = ""
+        if prefetched:
+            scratch = ("Observation (recuperación inicial de kb y web, hecha en paralelo): "
+                       f"{format_evidence(prefetched)}\n")
         for _ in range(self._max_steps):
             raw = self._llm.complete(
                 REACT_PROMPT.format(question=question, feedback=feedback or "ninguna",
@@ -78,7 +82,10 @@ class Investigator:
     def _use_tool(self, tool: str, arg: str) -> tuple[list[Evidence], str]:
         """Ejecuta una herramienta. Devuelve la evidencia obtenida y el texto de la Observation."""
         if tool in ("kb", "web"):
-            results = self._kb.retrieve(arg) if tool == "kb" else self._web.search(arg)
+            try:
+                results = self._kb.retrieve(arg) if tool == "kb" else self._web.search(arg)
+            except Exception as e:  # una búsqueda caída no debe tumbar el flujo
+                return [], f"error de la herramienta {tool}: {e}"
             return results, format_evidence(results) if results else "sin resultados"
         if tool == "calc":
             try:

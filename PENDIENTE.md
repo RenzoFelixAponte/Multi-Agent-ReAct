@@ -30,7 +30,8 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 
 ## Puntos a revisar
 
-- [ ] **Concurrencia.** El título 2.3 dice "Guardrails y Concurrencia" y no hay nada concurrente en el código (por ejemplo, consultar `kb` y `web` en paralelo con fan-out de LangGraph). Implementarlo o justificar su ausencia en el informe.
+- [x] **Concurrencia.** El título 2.3 dice "Guardrails y Concurrencia" y no hay nada concurrente en el código (por ejemplo, consultar `kb` y `web` en paralelo con fan-out de LangGraph). Implementarlo o justificar su ausencia en el informe.
+  - Hecho: `build_flow(..., prefetch=True)` consulta `kb` y `web` en paralelo (fan-out de LangGraph, `tests/test_concurrency.py` lo comprueba con una barrera) y el Investigador arranca con esa evidencia.
 - [x] **Sesgo en la comparación con Naive RAG.** `map_wikiqa` solo conserva frases con `label=1`, así que la KB contiene únicamente respuestas correctas y el Naive RAG parte con ventaja. Indexar también las frases `label=0` como distractores, o incluir preguntas que necesiten búsqueda web.
   - Hecho: `group_wikiqa` agrupa por pregunta y la KB indexa todas las frases candidatas (WikiQA validation: 126 preguntas con respuesta, 1119 frases únicas).
 - [ ] **Juez de la evaluación.** Decidir qué LLM actúa como juez (el mismo Mistral local u otro). Un 7B como juez es ruidoso; documentar la elección.
