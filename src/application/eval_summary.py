@@ -25,6 +25,8 @@ def _row(method: str, dataset: str, group: list[EvalRecord]) -> dict:
         "n": len(group),
         "respondidas": _mean([float(r.answered) for r in valid]),
         "faithfulness": _mean([r.faithfulness for r in valid if r.faithfulness is not None]),
+        "faithfulness_respondidas": _mean([r.faithfulness for r in valid
+                                           if r.answered and r.faithfulness is not None]),
         "answer_relevance": _mean([r.relevance for r in valid if r.relevance is not None]),
         "exactitud": _mean([float(r.correct) for r in with_truth]),
         "rondas": _mean([float(r.rounds) for r in valid]),
@@ -38,6 +40,8 @@ def summarize(records: Iterable[EvalRecord]) -> list[dict]:
     """Una fila por (método, dataset) y una fila 'todos' por método.
 
     Las abstenciones puntúan 0 en faithfulness y relevance (`respondidas` muestra cuántas fueron).
+    `faithfulness_respondidas` promedia solo las respuestas entregadas: separa "qué tan fiel es
+    cuando responde" de "cuántas veces se abstiene".
     `exactitud` solo cuenta GSM8K (número final) y MBPP (pruebas unitarias), que tienen verificación objetiva.
     """
     rows = latest(records)

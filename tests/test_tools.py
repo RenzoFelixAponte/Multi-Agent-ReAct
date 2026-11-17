@@ -155,3 +155,71 @@ def test_auditor_rejects_code_that_was_never_executed_as_delivered():
 
     ran_everything = (Evidence("python", "código:\ndef add(a, b):\n  return a + b\n\nassert add(1, 2) == 3\nsalida: ok"),)
     assert Auditor(ScriptedLLM(["APROBADO"])).review(Report("suma", answer, ran_everything)).approved
+
+
+MBPP_QUESTION = "Suma dos números.\nTu código debe pasar estas pruebas:\nassert add(1, 2) == 3\nassert add(0, 0) == 0"
+
+
+def test_extract_asserts_reads_the_tests_from_the_question():
+    from application.answer_checks import extract_asserts
+
+    assert extract_asserts(MBPP_QUESTION) == ["assert add(1, 2) == 3", "assert add(0, 0) == 0"]
+    assert extract_asserts("¿Capital del Perú?") == []
+
+
+def test_auditor_runs_the_delivered_code_against_the_question_tests():
+    from application.auditor import Auditor
+    from domain.report import Report
+
+    auditor = Auditor(ScriptedLLM([]), runner=SubprocessCodeRunner())  # no debe llamar al LLM
+    good = "```python\ndef add(a, b):\n    return a + b\n```"
+    assert auditor.review(Report(MBPP_QUESTION, good, ())).approved
+
+    wrong = auditor.review(Report(MBPP_QUESTION, "```python\ndef add(a, b):\n    return a - b\n```", ()))
+    assert not wrong.approved and "no pasa las pruebas" in wrong.reason and "AssertionError" in wrong.reason
+
+    no_code = auditor.review(Report(MBPP_QUESTION, "La función funciona.", ()))
+    assert not no_code.approved and "bloque" in no_code.reason
+
+
+def test_investigator_delivers_the_executed_code_when_final_omits_it():
+    code = "Action: python[def add(a, b):\n    return a + b\n\nassert add(1, 2) == 3\nprint('ok')]"
+    llm = ScriptedLLM([code, "Final: La función pasó las pruebas."])
+    report = Investigator(llm, StaticSearch([]), InMemoryKB([]), runner=SubprocessCodeRunner(),
+                          tools=("python",), task="code").run(MBPP_QUESTION)
+    assert report.answer.startswith("La función pasó las pruebas.")
+    assert "```python\ndef add(a, b):" in report.answer
+
+
+def test_investigator_only_offers_the_tools_of_its_task():
+    llm = ScriptedLLM(["Action: kb[huevos]", "Action: calc[16-3-4]", "Final: Respuesta final: 9"])
+    kb = InMemoryKB([Evidence("wiki", "Janet tiene 16 huevos.")])
+    report = Investigator(llm, StaticSearch([]), kb, tools=("calc",), task="math").run("huevos")
+
+    assert "kb[" not in llm.prompts[0].split("Ejemplo:")[0]
+    assert "calc[20 - 4*3]" in llm.prompts[0]          # ejemplo resuelto de matemáticas
+    assert "herramienta kb no disponible" in llm.prompts[1]
+    assert [e.source for e in report.evidence] == ["calc"]
+
+
+def test_investigator_drops_duplicated_evidence():
+    llm = ScriptedLLM(["Action: kb[capital Perú]", "Final: Lima"])
+    kb = InMemoryKB([Evidence("wiki", "Lima es la capital del Perú.")])
+    report = Investigator(llm, StaticSearch([]), kb).run("capital", prefetched=kb.retrieve("capital Perú"))
+    assert len(report.evidence) == 1
+
+
+def test_code_flow_audits_by_execution_and_retries_with_the_error_and_previous_answer():
+    llm = ScriptedLLM([
+        "Final:\n```python\ndef add(a, b):\n    return a - b\n```",           # ronda 1: código mal
+        "Action: python[def add(a, b):\n    return a + b\n\nassert add(1, 2) == 3]",
+        "Final: Corregido.",                                                  # ronda 2: sin bloque
+    ])
+    runner = SubprocessCodeRunner()
+    flow = build_flow(llm, StaticSearch([]), InMemoryKB([]), runner=runner, task="code")
+    state = flow.invoke({"question": MBPP_QUESTION})
+
+    assert state["verdict"].approved and state["rounds"] == 2
+    assert "AssertionError" in llm.prompts[1] and "return a - b" in llm.prompts[1]
+    item = BenchmarkItem("mbpp", "1", "suma", "", tests=("assert add(1, 2) == 3", "assert add(0, 0) == 0"))
+    assert passes_tests(state["final"], item, runner)

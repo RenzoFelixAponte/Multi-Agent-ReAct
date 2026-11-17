@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from application.answer_checks import extract_code
+from application.answer_checks import extract_code, has_code_block, last_executed_function
 from application.calculator import calculate
 from application.formatting import format_evidence
-from application.prompts import LAST_STEP_NOTICE, REACT_PROMPT, TOOL_DESCRIPTIONS
+from application.prompts import LAST_STEP_NOTICE, REACT_EXAMPLES, REACT_PROMPT, TOOL_DESCRIPTIONS
 from domain.evidence import Evidence
 from domain.report import Report
 from ports.code_runner_port import CodeRunnerPort
@@ -37,17 +37,26 @@ def parse_action(text: str) -> tuple[str, str] | None:
 
 
 class Investigator:
-    """Bucle ReAct: Thought -> Action -> Observation hasta obtener Final."""
+    """Bucle ReAct: Thought -> Action -> Observation hasta obtener Final.
+
+    `tools` limita las herramientas que ve y puede usar (por defecto kb, web, calc y, si hay
+    `runner`, python). `task` elige el ejemplo resuelto del prompt ("qa", "math" o "code").
+    """
 
     def __init__(self, llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort,
-                 max_steps: int = MAX_REACT_STEPS, runner: CodeRunnerPort | None = None) -> None:
+                 max_steps: int = MAX_REACT_STEPS, runner: CodeRunnerPort | None = None,
+                 tools: Sequence[str] | None = None, task: str = "general") -> None:
         self._llm = llm
         self._web = web
         self._kb = kb
         self._runner = runner
         self._max_steps = max_steps
-        names = ["kb", "web", "calc"] + (["python"] if runner else [])
+        names = list(tools) if tools is not None else ["kb", "web", "calc"] + (["python"] if runner else [])
+        if runner is None and "python" in names:
+            names.remove("python")
+        self._names = frozenset(names)
         self._tools = "\n".join(f"- {TOOL_DESCRIPTIONS[n]}" for n in names)
+        self._example = REACT_EXAMPLES[task]
 
     def run(self, question: str, feedback: str = "", prefetched: Sequence[Evidence] = ()) -> Report:
         evidence: list[Evidence] = list(prefetched)
@@ -59,8 +68,8 @@ class Investigator:
         for step in range(self._max_steps):
             last = LAST_STEP_NOTICE if step == self._max_steps - 1 else ""
             raw = self._llm.complete(
-                REACT_PROMPT.format(question=question, feedback=feedback or "ninguna",
-                                    tools=self._tools, scratch=scratch, last_step=last)
+                REACT_PROMPT.format(question=question, feedback=feedback or "ninguna", tools=self._tools,
+                                    example=self._example, scratch=scratch, last_step=last)
             ).strip()
             # El modelo puede inventar su propia Observation. Solo el sistema escribe observaciones,
             # así que se descarta todo lo que venga después de la primera Observation del modelo.
@@ -71,7 +80,8 @@ class Investigator:
             if action is None:
                 final = FINAL_RE.search(out)
                 if final:
-                    return Report(question, final.group(1).strip(), tuple(evidence))
+                    return Report(question, self._deliverable(final.group(1).strip(), evidence),
+                                  tuple(dict.fromkeys(evidence)))
                 scratch += "Observation: formato no válido. Usa Action o Final.\n"
                 continue
 
@@ -86,10 +96,21 @@ class Investigator:
             evidence.extend(found)
             scratch += f"Observation: {observation}\n"
 
-        return Report(question, "", tuple(evidence))
+        return Report(question, "", tuple(dict.fromkeys(evidence)))
+
+    def _deliverable(self, answer: str, evidence: list[Evidence]) -> str:
+        """Si el modelo dice que su código funciona pero no lo copia en Final, se entrega el código
+        que realmente ejecutó: transcribirlo de nuevo es justo donde un 7B introduce errores."""
+        if "python" in self._names and not has_code_block(answer):
+            code = last_executed_function(evidence)
+            if code:
+                return f"{answer}\n```python\n{code}\n```"
+        return answer
 
     def _use_tool(self, tool: str, arg: str) -> tuple[list[Evidence], str]:
         """Ejecuta una herramienta. Devuelve la evidencia obtenida y el texto de la Observation."""
+        if tool not in self._names:
+            return [], f"herramienta {tool} no disponible; usa solo las herramientas listadas"
         if tool in ("kb", "web"):
             try:
                 results = self._kb.retrieve(arg) if tool == "kb" else self._web.search(arg)
@@ -102,8 +123,6 @@ class Investigator:
             except ValueError as e:
                 return [], f"error de cálculo: {e}"
             return [Evidence("calc", f"{arg} = {value}")], value
-        if self._runner is None:
-            return [], "herramienta python no disponible"
         code = extract_code(arg)
         result = self._runner.run(code, CODE_TIMEOUT)
         if not result.ok:

@@ -59,3 +59,18 @@ def code_was_executed(answer: str, evidence: Sequence[Evidence]) -> bool:
     code = squash(extract_code(answer))
     return any(e.source == "python" and code in squash(e.text) for e in evidence)
 
+
+def extract_asserts(text: str) -> list[str]:
+    """Líneas `assert` que trae el enunciado (en MBPP, las pruebas que el código debe pasar)."""
+    return [line.strip() for line in text.splitlines() if line.strip().startswith("assert ")]
+
+
+def last_executed_function(evidence: Sequence[Evidence]) -> str | None:
+    """Código de la última ejecución exitosa de `python` que define una función."""
+    for e in reversed(evidence):
+        if e.source == "python" and e.text.startswith("código:\n"):
+            code = e.text[len("código:\n"):].rsplit("\nsalida:", 1)[0].strip()
+            if "def " in code:
+                return code
+    return None
+

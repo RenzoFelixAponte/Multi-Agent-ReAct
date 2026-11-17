@@ -169,6 +169,7 @@ def test_summarize_groups_by_method_and_dataset_with_overall_row():
     table = {(r["método"], r["dataset"]): r for r in summarize(records)}
     gsm = table[(MULTIAGENT, "gsm8k")]
     assert (gsm["n"], gsm["respondidas"], gsm["faithfulness"], gsm["exactitud"]) == (2, 0.5, 0.5, 0.5)
+    assert gsm["faithfulness_respondidas"] == 1.0  # la abstención no entra en este promedio
     everything = table[(MULTIAGENT, "todos")]
     assert everything["n"] == 3 and everything["faithfulness"] == pytest.approx(0.5)
     assert table[(NAIVE, "todos")]["exactitud"] is None
