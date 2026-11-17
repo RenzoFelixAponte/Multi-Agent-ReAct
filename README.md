@@ -49,6 +49,22 @@ El núcleo (`domain` y `application`) solo importa puertos. Cambiar Mistral por 
 - **Juez:** por defecto es el mismo Mistral de 7B que orquesta (`JUDGE_BACKEND = "same"` en el notebook); un 7B como juez es ruidoso y puede favorecer sus propias respuestas. Se puede usar un juez remoto con `JUDGE_BACKEND = "nvidia"`. Los formatos inválidos del juez se cuentan en `juez_fallido`.
 - **Código ejecutado:** `SubprocessCodeRunner` limita tiempo, CPU y memoria, pero no bloquea la red ni los archivos; es aceptable porque la VM de Colab es desechable.
 
+## Resultados (50 consultas, Mistral-7B de 4 bits en una T4)
+
+Una corrida: 20 WikiQA + 15 GSM8K + 15 MBPP, los dos métodos sobre las mismas consultas y con el mismo juez. El notebook ejecutado está en `notebooks/proyecto2_output.ipynb`; la tabla y cada registro están en `results/`.
+
+| método | respondidas | faithfulness | faithfulness (respondidas) | answer relevance | exactitud (GSM8K + MBPP) | s/consulta |
+|---|---|---|---|---|---|---|
+| multi-agente | 0.84 | 0.580 | **0.691** | 0.792 | **0.50** | 88.9 |
+| Naive RAG | 1.00 | **0.663** | 0.663 | **0.911** | 0.30 | 26.0 |
+
+Por dataset, la exactitud es 0.33 contra 0.20 en GSM8K y 0.67 contra 0.40 en MBPP; en WikiQA la fidelidad es 0.605 contra 0.649 y la relevancia 0.88 contra 0.89.
+
+- **Dónde gana el multi-agente:** en la verificación objetiva (+20 puntos de exactitud: acierta 8 consultas que el Naive RAG falla, contra 2 al revés) y en fidelidad cuando responde.
+- **Dónde pierde:** en *Faithfulness* y *Answer Relevance* promediadas sobre las 50, porque sus 8 abstenciones (3 de GSM8K y 5 de MBPP) puntúan 0. En 7 de esas 8 consultas el Naive RAG entregó una respuesta incorrecta: el guardrail cambió respuestas equivocadas por abstenciones, y estas métricas premian responder algo.
+- **WikiQA:** casi empate. Varias respuestas cortas y correctas del multi-agente recibieron fidelidad de 0.1 a 0.15 (por ejemplo, "Holly Ridge, North Carolina is located in Onslow County."). Es posible que el juez de 7B rinda peor con el contexto más largo del multi-agente (6 a 10 fragmentos contra 3), pero no está comprobado.
+- **Límites:** una sola corrida, 50 consultas y un juez de 7B (el mismo modelo que responde). El multi-agente es unas 3,4 veces más lento.
+
 ## Pruebas locales
 
 ```bash
