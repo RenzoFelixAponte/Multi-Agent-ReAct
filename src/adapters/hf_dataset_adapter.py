@@ -1,7 +1,7 @@
 """Adaptador que descarga datasets de Hugging Face y los convierte en BenchmarkItem."""
 from __future__ import annotations
 
-from adapters.hf_mappers import MAPPERS, map_rows
+from adapters.hf_mappers import map_rows
 from domain.benchmark_item import BenchmarkItem
 
 # nombre lógico -> (id en Hugging Face, configuración)
@@ -16,7 +16,7 @@ class HFDatasetAdapter:
     """Implementa DatasetPort descargando desde Hugging Face con la librería `datasets`."""
 
     def load(self, name: str, split: str, limit: int) -> list[BenchmarkItem]:
-        if name not in DATASET_SPECS or name not in MAPPERS:
+        if name not in DATASET_SPECS:
             raise ValueError(f"dataset desconocido: {name}. Válidos: {sorted(DATASET_SPECS)}")
         from datasets import load_dataset
 

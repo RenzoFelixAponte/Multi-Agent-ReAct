@@ -10,18 +10,32 @@ from domain.evidence import Evidence
 _GSM8K_FINAL = re.compile(r"####\s*(.+)$")
 
 
-def map_wikiqa(row: dict[str, Any], index: int, positives_only: bool = True) -> BenchmarkItem | None:
-    """WikiQA: pregunta + frase candidata. Con positives_only solo se conservan las frases correctas (label=1)."""
-    if positives_only and int(row["label"]) != 1:
-        return None
-    evidence = Evidence(source=row["document_title"], text=row["answer"])
-    return BenchmarkItem(
-        dataset="wiki_qa",
-        item_id=str(row.get("question_id", index)),
-        question=row["question"],
-        reference=row["answer"],
-        context=(evidence,),
-    )
+def group_wikiqa(rows: list[dict[str, Any]], limit: int) -> list[BenchmarkItem]:
+    """WikiQA: una consulta por pregunta que tenga al menos una frase correcta (label=1).
+
+    El contexto conserva TODAS las frases candidatas, también las incorrectas (label=0). Así la base
+    vectorial tiene distractores y la recuperación no parte con la respuesta servida en bandeja.
+    La referencia es la unión de las frases correctas.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        groups.setdefault(str(row["question_id"]), []).append(row)
+
+    items: list[BenchmarkItem] = []
+    for question_id, group in groups.items():
+        positives = [r["answer"] for r in group if int(r["label"]) == 1]
+        if not positives:
+            continue
+        items.append(BenchmarkItem(
+            dataset="wiki_qa",
+            item_id=question_id,
+            question=group[0]["question"],
+            reference=" ".join(positives),
+            context=tuple(Evidence(source=r["document_title"], text=r["answer"]) for r in group),
+        ))
+        if len(items) >= limit:
+            break
+    return items
 
 
 def map_gsm8k(row: dict[str, Any], index: int) -> BenchmarkItem | None:
@@ -49,18 +63,20 @@ def map_mbpp(row: dict[str, Any], index: int) -> BenchmarkItem | None:
     )
 
 
-MAPPERS: dict[str, Callable[..., BenchmarkItem | None]] = {
-    "wiki_qa": map_wikiqa,
+ROW_MAPPERS: dict[str, Callable[[dict[str, Any], int], BenchmarkItem | None]] = {
     "gsm8k": map_gsm8k,
     "mbpp": map_mbpp,
 }
+DATASET_NAMES = ("wiki_qa", *ROW_MAPPERS)
 
 
 def map_rows(name: str, rows: list[dict[str, Any]], limit: int) -> list[BenchmarkItem]:
-    """Aplica el mapeador del dataset y descarta filas no válidas hasta reunir `limit` items."""
-    if name not in MAPPERS:
-        raise ValueError(f"dataset desconocido: {name}. Válidos: {sorted(MAPPERS)}")
-    mapper = MAPPERS[name]
+    """Convierte las filas del dataset y descarta las no válidas hasta reunir `limit` items."""
+    if name not in DATASET_NAMES:
+        raise ValueError(f"dataset desconocido: {name}. Válidos: {sorted(DATASET_NAMES)}")
+    if name == "wiki_qa":
+        return group_wikiqa(rows, limit)
+    mapper = ROW_MAPPERS[name]
     items: list[BenchmarkItem] = []
     for i, row in enumerate(rows):
         item = mapper(row, i)
@@ -72,5 +88,12 @@ def map_rows(name: str, rows: list[dict[str, Any]], limit: int) -> list[Benchmar
 
 
 def wikiqa_documents(items: list[BenchmarkItem]) -> list[Evidence]:
-    """Documentos para indexar en la base vectorial a partir del contexto de WikiQA."""
-    return [ev for item in items for ev in item.context]
+    """Documentos para indexar en la base vectorial (frases correctas y distractoras, sin repetir)."""
+    seen: set[Evidence] = set()
+    documents: list[Evidence] = []
+    for item in items:
+        for evidence in item.context:
+            if evidence not in seen:
+                seen.add(evidence)
+                documents.append(evidence)
+    return documents

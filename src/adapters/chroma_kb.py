@@ -1,6 +1,8 @@
 """Base vectorial local con ChromaDB."""
 from __future__ import annotations
 
+import hashlib
+
 from domain.evidence import Evidence
 
 
@@ -12,8 +14,9 @@ class ChromaKB:
         self._col = client.get_or_create_collection(collection_name)
 
     def index(self, documents: list[Evidence]) -> None:
+        """Indexa de forma idempotente: el id sale del contenido, así reindexar lo mismo no duplica."""
         self._col.upsert(
-            ids=[f"doc-{i}" for i in range(len(documents))],
+            ids=[hashlib.sha1(f"{d.source}\n{d.text}".encode("utf-8")).hexdigest() for d in documents],
             documents=[d.text for d in documents],
             metadatas=[{"source": d.source} for d in documents],
         )

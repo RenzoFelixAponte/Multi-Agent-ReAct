@@ -31,7 +31,8 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 ## Puntos a revisar
 
 - [ ] **Concurrencia.** El título 2.3 dice "Guardrails y Concurrencia" y no hay nada concurrente en el código (por ejemplo, consultar `kb` y `web` en paralelo con fan-out de LangGraph). Implementarlo o justificar su ausencia en el informe.
-- [ ] **Sesgo en la comparación con Naive RAG.** `map_wikiqa` solo conserva frases con `label=1`, así que la KB contiene únicamente respuestas correctas y el Naive RAG parte con ventaja. Indexar también las frases `label=0` como distractores, o incluir preguntas que necesiten búsqueda web.
+- [x] **Sesgo en la comparación con Naive RAG.** `map_wikiqa` solo conserva frases con `label=1`, así que la KB contiene únicamente respuestas correctas y el Naive RAG parte con ventaja. Indexar también las frases `label=0` como distractores, o incluir preguntas que necesiten búsqueda web.
+  - Hecho: `group_wikiqa` agrupa por pregunta y la KB indexa todas las frases candidatas (WikiQA validation: 126 preguntas con respuesta, 1119 frases únicas).
 - [ ] **Juez de la evaluación.** Decidir qué LLM actúa como juez (el mismo Mistral local u otro). Un 7B como juez es ruidoso; documentar la elección.
 - [ ] **Corrida de 50 consultas.** Puede tomar de 1 a 3 horas con Mistral 4 bits (estimación, sin medir). Medir el tiempo con 3 a 5 consultas antes de lanzar todo.
 
