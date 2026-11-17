@@ -17,9 +17,10 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
   - [x] Herramienta que ejecute código Python para MBPP, en un entorno aislado y con tiempo límite.
   - [x] `map_mbpp` descarta `test_list`: conservarlo en `BenchmarkItem` para verificar el código generado.
 - [ ] **LLM local en la T4.** La sección 2 exige un modelo de 7B u 8B cuantizado en 4 bits como orquestador. El notebook usa `BACKEND = "nvidia"` (API remota, modelo de 120B).
-  - [ ] Validar `MistralLocalLLM` (Mistral-7B-Instruct-v0.3, 4 bits) en la T4 o en la laptop (RTX 4050, 6 GB: cabe justo).
+  - [x] Validar `MistralLocalLLM` (Mistral-7B-Instruct-v0.3, 4 bits) en la T4 o en la laptop (RTX 4050, 6 GB: cabe justo).
+    - Hecho en Colab: carga en una `Tesla T4` y corre el flujo completo de las tres tareas. Con la cuenta gratuita (0 unidades de cómputo) la T4 estuvo disponible.
   - [x] Dejar `BACKEND = "mistral"` como valor por defecto en el notebook entregable.
-  - [ ] Si el modelo es restringido en Hugging Face, aceptar los términos y usar `HF_TOKEN`.
+  - [x] Si el modelo es restringido en Hugging Face, aceptar los términos y usar `HF_TOKEN`.
 
 ## Está roto o incompleto
 
@@ -39,6 +40,7 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 - [x] **Juez de la evaluación.** Decidir qué LLM actúa como juez (el mismo Mistral local u otro). Un 7B como juez es ruidoso; documentar la elección.
   - Decisión: por defecto el mismo Mistral (`JUDGE_BACKEND = "same"`), con opción de juez remoto; documentado en el README y en el notebook, y los formatos inválidos se cuentan en `juez_fallido`.
 - [ ] **Corrida de 50 consultas.** Puede tomar de 1 a 3 horas con Mistral 4 bits (estimación, sin medir). Medir el tiempo con 3 a 5 consultas antes de lanzar todo.
+  - Medido en la T4: 12 registros en 501 a 665 s (42 a 55 s por registro, 24 s Naive RAG y ~60 s multi-agente), o sea 70 a 90 min para los 100 registros. Falta lanzar la corrida completa.
 
 ## Dónde ejecutar
 
@@ -46,10 +48,11 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 - Validación del modelo local: laptop (RTX 4050, 6 GB de VRAM) o Colab (T4, 16 GB). Falta `torch` en la laptop; usar un venv.
 - Corrida final: Colab con T4. Opción: [Google Colab CLI](https://github.com/googlecolab/google-colab-cli) oficial (Linux/macOS).
   - [x] Instalar con `uv tool install google-colab-cli` y hacer el login OAuth (lo hace el usuario).
-  - [ ] Comprobar si la cuenta tiene T4: `colab new --gpu T4 -s proyecto` (un `--gpu` mal escrito cae en A100 sin avisar).
+  - [x] Comprobar si la cuenta tiene T4: `colab new --gpu T4 -s proyecto` (un `--gpu` mal escrito cae en A100 sin avisar).
   - [x] Cambiar el notebook para usar el código subido en vez de clonar el repo de GitHub. Usa `/content/Multi-Agent-ReAct` si existe; `scripts/colab_run.sh` lo sube con `colab upload`.
   - [ ] Ejecutar con `colab exec -s proyecto -f notebooks/proyecto2.ipynb`, bajar `_output.ipynb` y el CSV, y cerrar con `colab stop -s proyecto`.
-  - [ ] Verificar con `colab help exec` si existe modo en segundo plano y cómo pasar `HF_TOKEN` (`--env`); el README oficial no lo documenta.
+  - [x] Verificar con `colab help exec` si existe modo en segundo plano y cómo pasar `HF_TOKEN` (`--env`); el README oficial no lo documenta.
+    - `--env KEY=VALUE` funciona y `--timeout 0` quita el límite de silencio. No hay modo en segundo plano: se lanza el comando local en segundo plano. `echo '!cmd' | colab exec` se colgó una vez; usar `-f archivo.py`.
 
 ## Ya cumple
 

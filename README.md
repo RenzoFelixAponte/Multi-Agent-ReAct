@@ -37,7 +37,8 @@ El núcleo (`domain` y `application`) solo importa puertos. Cambiar Mistral por 
 ## Decisiones de diseño
 
 - **Concurrencia:** `build_flow(..., prefetch=True)` consulta `kb` y `web` a la vez (fan-out de LangGraph, con un reductor que une la evidencia) antes del bucle ReAct. Una rama caída no tumba a la otra.
-- **Guardrail:** el Auditor rechaza sin evidencia (regla determinista) o cuando el LLM no encuentra respaldo; el motivo vuelve al Investigador. Tras `max_rounds` rechazos el flujo termina sin respuesta (abstención).
+- **Guardrail:** el Auditor rechaza sin evidencia o con código que no se ejecutó tal cual con `python[...]` (reglas deterministas), o cuando el LLM no encuentra respaldo; el motivo vuelve al Investigador. Tras `max_rounds` rechazos el flujo termina sin respuesta (abstención). El Redactor no reescribe el código ya verificado.
+- **Límites del 7B (medidos en la T4):** repite la misma `Action` en bucle (por eso hay una regla anti-repetición, un ejemplo en el prompt y un último paso que exige `Final`), a veces razona mal aunque `calc` le dé el resultado correcto, y como juez casi siempre da 10/10 en *Answer Relevance*. Ningún guardrail determinista arregla un error de razonamiento.
 - **Base de conocimiento:** se indexan todas las frases candidatas de WikiQA, también las incorrectas, para que el Naive RAG no parta con ventaja.
 - **Evaluación:** *Faithfulness* y *Answer Relevance* con las definiciones de RAGAS, implementadas como LLM-as-a-Judge (sin la librería `ragas`). GSM8K (número final) y MBPP (`test_list`) además se verifican de forma objetiva. Las abstenciones puntúan 0.
 - **Juez:** por defecto es el mismo Mistral de 7B que orquesta (`JUDGE_BACKEND = "same"` en el notebook); un 7B como juez es ruidoso y puede favorecer sus propias respuestas. Se puede usar un juez remoto con `JUDGE_BACKEND = "nvidia"`. Los formatos inválidos del juez se cuentan en `juez_fallido`.
