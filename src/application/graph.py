@@ -5,16 +5,18 @@ from langgraph.graph import END, StateGraph
 
 from application.auditor import Auditor
 from application.flow_state import FlowState
-from application.investigator import Investigator
+from application.investigator import MAX_REACT_STEPS, Investigator
 from application.redactor import Redactor
+from ports.code_runner_port import CodeRunnerPort
 from ports.knowledge_base_port import KnowledgeBasePort
 from ports.llm_port import LLMPort
 from ports.web_search_port import WebSearchPort
 
 
-def build_flow(llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort, max_rounds: int = 3):
+def build_flow(llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort, max_rounds: int = 3,
+               runner: CodeRunnerPort | None = None, max_steps: int = MAX_REACT_STEPS):
     """Construye el grafo: investigate -> audit -> (redact | feedback -> investigate | fin)."""
-    investigator = Investigator(llm, web, kb)
+    investigator = Investigator(llm, web, kb, max_steps=max_steps, runner=runner)
     auditor = Auditor(llm)
     redactor = Redactor(llm)
 

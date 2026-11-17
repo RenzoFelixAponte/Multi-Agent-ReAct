@@ -10,10 +10,10 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
   - [ ] Set de 50 consultas complejas (mezclar WikiQA, GSM8K y MBPP, o preguntas de varios pasos).
   - [ ] Tabla comparativa multi-agente vs Naive RAG sobre las 50 consultas.
   - [ ] Guardar resultados parciales en CSV/JSON para poder reanudar si se corta la corrida.
-- [ ] **Herramientas para GSM8K y MBPP.** El `Investigator` solo entiende `kb[...]` y `web[...]` (`src/application/investigator.py:15`).
-  - [ ] Herramienta de cálculo para GSM8K y comparación con la referencia numérica.
-  - [ ] Herramienta que ejecute código Python para MBPP, en un entorno aislado y con tiempo límite.
-  - [ ] `map_mbpp` descarta `test_list`: conservarlo en `BenchmarkItem` para verificar el código generado.
+- [x] **Herramientas para GSM8K y MBPP.** El `Investigator` solo entiende `kb[...]` y `web[...]` (`src/application/investigator.py:15`).
+  - [x] Herramienta de cálculo para GSM8K y comparación con la referencia numérica.
+  - [x] Herramienta que ejecute código Python para MBPP, en un entorno aislado y con tiempo límite.
+  - [x] `map_mbpp` descarta `test_list`: conservarlo en `BenchmarkItem` para verificar el código generado.
 - [ ] **LLM local en la T4.** La sección 2 exige un modelo de 7B u 8B cuantizado en 4 bits como orquestador. El notebook usa `BACKEND = "nvidia"` (API remota, modelo de 120B).
   - [ ] Validar `MistralLocalLLM` (Mistral-7B-Instruct-v0.3, 4 bits) en la T4 o en la laptop (RTX 4050, 6 GB: cabe justo).
   - [ ] Dejar `BACKEND = "mistral"` como valor por defecto en el notebook entregable.

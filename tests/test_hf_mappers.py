@@ -33,11 +33,13 @@ def test_gsm8k_extracts_final_number_and_drops_rows_without_marker():
 
 
 def test_mbpp_uses_text_as_question_and_code_as_reference():
-    row = {"task_id": 11, "text": "Remove first occurrence", "code": "def f(s): return s"}
+    row = {"task_id": 11, "text": "Remove first occurrence", "code": "def f(s): return s",
+           "test_list": ["assert f('a') == 'a'", "assert f('') == ''"], "test_setup_code": ""}
     item = map_mbpp(row, 0)
     assert item.item_id == "11"
     assert item.question == "Remove first occurrence"
     assert item.reference == "def f(s): return s"
+    assert item.tests == ("assert f('a') == 'a'", "assert f('') == ''")
 
 
 def test_map_rows_respects_limit_and_rejects_unknown_dataset():

@@ -38,12 +38,14 @@ def map_gsm8k(row: dict[str, Any], index: int) -> BenchmarkItem | None:
 
 
 def map_mbpp(row: dict[str, Any], index: int) -> BenchmarkItem | None:
-    """MBPP: el enunciado es 'text' y la referencia es el código de la solución."""
+    """MBPP: el enunciado es 'text', la referencia es el código y `test_list` verifica el código generado."""
     return BenchmarkItem(
         dataset="mbpp",
         item_id=str(row.get("task_id", index)),
         question=row["text"],
         reference=row["code"],
+        tests=tuple(row.get("test_list") or ()),
+        setup_code=row.get("test_setup_code") or "",
     )
 
 
