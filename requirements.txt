@@ -1,6 +1,19 @@
+# Núcleo
 langgraph>=0.2
+
+# Adaptadores reales
+datasets>=2.19
+chromadb>=0.5
+ddgs>=9.0
+
+# LLM local 4-bit (en Colab torch y transformers ya vienen instalados)
+torch>=2.2
+transformers>=4.44
+accelerate>=0.33
+bitsandbytes>=0.43
+
+# Notebook y tabla de resultados
+pandas>=2.0
+
+# Pruebas
 pytest>=8
-# Adaptadores reales (instalar en Colab):
-# transformers, accelerate, bitsandbytes, torch
-# chromadb
-# ddgs
