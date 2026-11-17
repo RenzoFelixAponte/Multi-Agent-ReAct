@@ -5,11 +5,13 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 ## Falta por completo
 
 - [ ] **Evaluación cuantitativa (sección 4).** No hay código de RAGAS ni de LLM-as-a-Judge.
-  - [ ] Métrica *Faithfulness* (fidelidad de la respuesta al contexto recuperado).
-  - [ ] Métrica *Answer Relevance* (relevancia de la respuesta final a la pregunta).
-  - [ ] Set de 50 consultas complejas (mezclar WikiQA, GSM8K y MBPP, o preguntas de varios pasos).
-  - [ ] Tabla comparativa multi-agente vs Naive RAG sobre las 50 consultas.
-  - [ ] Guardar resultados parciales en CSV/JSON para poder reanudar si se corta la corrida.
+  - [x] Métrica *Faithfulness* (fidelidad de la respuesta al contexto recuperado).
+  - [x] Métrica *Answer Relevance* (relevancia de la respuesta final a la pregunta).
+  - [x] Set de 50 consultas complejas (mezclar WikiQA, GSM8K y MBPP, o preguntas de varios pasos).
+    - Hecho: `EVAL_MIX` = 20 WikiQA + 15 GSM8K + 15 MBPP (`src/application/eval_set.py`).
+  - [ ] Tabla comparativa multi-agente vs Naive RAG sobre las 50 consultas. El código (`summarize`) está listo; falta la corrida real en Colab.
+  - [x] Guardar resultados parciales en CSV/JSON para poder reanudar si se corta la corrida.
+    - Hecho: `JsonlResultStore` escribe un registro por línea y `Evaluator.run` salta lo ya hecho y reintenta lo que falló.
 - [x] **Herramientas para GSM8K y MBPP.** El `Investigator` solo entiende `kb[...]` y `web[...]` (`src/application/investigator.py:15`).
   - [x] Herramienta de cálculo para GSM8K y comparación con la referencia numérica.
   - [x] Herramienta que ejecute código Python para MBPP, en un entorno aislado y con tiempo límite.

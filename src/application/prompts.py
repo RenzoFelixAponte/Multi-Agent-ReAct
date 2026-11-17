@@ -52,3 +52,27 @@ Contexto:
 
 Pregunta: {question}
 Respuesta:"""
+
+
+FAITHFULNESS_PROMPT = """Evalúa la fidelidad de una respuesta a su contexto.
+1. Descompón la respuesta en afirmaciones atómicas (máximo 8).
+2. Para cada una indica si se puede inferir del contexto, sin conocimiento externo.
+Responde una línea por afirmación, exactamente con el formato:
+SI: afirmación
+NO: afirmación
+
+Contexto:
+{context}
+
+Respuesta:
+{answer}"""
+
+RELEVANCE_PROMPT = """Evalúa qué tan directamente responde la respuesta a la pregunta.
+No juzgues si es verdadera, solo si atiende lo que se pregunta.
+0 = no tiene relación, 5 = responde parcialmente o con relleno, 10 = responde de forma directa y completa.
+Responde solo con una línea: PUNTAJE: <entero de 0 a 10>
+
+Pregunta: {question}
+
+Respuesta:
+{answer}"""
