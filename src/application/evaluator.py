@@ -55,7 +55,7 @@ class Evaluator:
             answer, evidence, rounds = self._answer(item, question, method)
             answered = bool(answer.strip())
             if answered:
-                faithfulness = self._judge.faithfulness(answer, evidence)
+                faithfulness = self._judge.faithfulness(answer, evidence, question)
                 relevance = self._judge.relevance(question, answer)
                 correct = self._correct(item, answer)
             else:  # abstención: el guardrail prefirió no responder, y eso puntúa 0

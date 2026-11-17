@@ -13,14 +13,20 @@ MAX_CONTEXT_CHARS = 6000
 MAX_ANSWER_CHARS = 3000
 ATTEMPTS = 2
 
-_CLAIM = re.compile(r"^[\s\-\*\d\.\)]*(SI|SÍ|NO)\s*:", re.I | re.M)
+# Mistral a veces ignora el formato pedido y responde "1. afirmación (YES) - explicación"
+_LEADING = re.compile(r"^[\s\-\*\d\.\)]*(SI|SÍ|YES|NO)\s*:", re.I)
+_PARENTHESIZED = re.compile(r"\((SI|SÍ|YES|NO)\)", re.I)
 _SCORE = re.compile(r"PUNTAJE\s*:\s*(\d{1,2})", re.I)
 _ANY_INT = re.compile(r"\b(\d{1,2})\b")
 
 
 def parse_faithfulness(text: str) -> float | None:
     """Fracción de afirmaciones marcadas SI. None si el juez no devolvió ninguna con el formato pedido."""
-    verdicts = [m.group(1).upper() for m in _CLAIM.finditer(text)]
+    verdicts = []
+    for line in text.splitlines():
+        match = _LEADING.match(line) or _PARENTHESIZED.search(line)
+        if match:
+            verdicts.append(match.group(1).upper())
     if not verdicts:
         return None
     return sum(v != "NO" for v in verdicts) / len(verdicts)
@@ -41,11 +47,14 @@ class Judge:
     def __init__(self, llm: LLMPort) -> None:
         self._llm = llm
 
-    def faithfulness(self, answer: str, evidence: Sequence[Evidence]) -> float | None:
+    def faithfulness(self, answer: str, evidence: Sequence[Evidence], question: str = "") -> float | None:
+        """Los datos del enunciado cuentan como información dada: en GSM8K y MBPP el contexto son
+        solo salidas de herramientas, y la respuesta repite con razón los datos de la pregunta."""
         if not evidence:
             return 0.0  # nada en el contexto puede respaldar la respuesta
         prompt = FAITHFULNESS_PROMPT.format(
-            context=format_evidence(evidence)[:MAX_CONTEXT_CHARS], answer=answer[:MAX_ANSWER_CHARS])
+            question=question, context=format_evidence(evidence)[:MAX_CONTEXT_CHARS],
+            answer=answer[:MAX_ANSWER_CHARS])
         return self._ask(prompt, parse_faithfulness)
 
     def relevance(self, question: str, answer: str) -> float | None:

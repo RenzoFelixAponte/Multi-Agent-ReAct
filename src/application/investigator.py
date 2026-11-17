@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from application.answer_checks import extract_code
 from application.calculator import calculate
 from application.formatting import format_evidence
-from application.prompts import REACT_PROMPT, TOOL_DESCRIPTIONS
+from application.prompts import LAST_STEP_NOTICE, REACT_PROMPT, TOOL_DESCRIPTIONS
 from domain.evidence import Evidence
 from domain.report import Report
 from ports.code_runner_port import CodeRunnerPort
@@ -55,10 +55,12 @@ class Investigator:
         if prefetched:
             scratch = ("Observation (recuperación inicial de kb y web, hecha en paralelo): "
                        f"{format_evidence(prefetched)}\n")
-        for _ in range(self._max_steps):
+        done: set[tuple[str, str]] = set()
+        for step in range(self._max_steps):
+            last = LAST_STEP_NOTICE if step == self._max_steps - 1 else ""
             raw = self._llm.complete(
                 REACT_PROMPT.format(question=question, feedback=feedback or "ninguna",
-                                    tools=self._tools, scratch=scratch)
+                                    tools=self._tools, scratch=scratch, last_step=last)
             ).strip()
             # El modelo puede inventar su propia Observation. Solo el sistema escribe observaciones,
             # así que se descarta todo lo que venga después de la primera Observation del modelo.
@@ -73,7 +75,14 @@ class Investigator:
                 scratch += "Observation: formato no válido. Usa Action o Final.\n"
                 continue
 
+            if action in done:  # los 7B suelen repetir la misma Action en bucle en vez de responder
+                scratch += ("Observation: ya ejecutaste esa Action y tienes su resultado arriba. "
+                            "No la repitas: escribe Final con la información disponible.\n")
+                continue
+            done.add(action)
             found, observation = self._use_tool(*action)
+            if len(ACTION_START_RE.findall(out)) > 1:
+                observation += "\n(Solo se ejecutó la primera Action. Escribe una sola Action por turno.)"
             evidence.extend(found)
             scratch += f"Observation: {observation}\n"
 

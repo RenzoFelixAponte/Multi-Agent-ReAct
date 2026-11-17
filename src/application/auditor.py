@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from application.answer_checks import code_was_executed, has_code_block
 from application.formatting import format_evidence
 from application.prompts import AUDIT_PROMPT
 from domain.audit_verdict import AuditVerdict
@@ -18,7 +19,9 @@ class Auditor:
             return AuditVerdict(False, "no hubo respuesta final dentro del límite de pasos")
         if not report.evidence:
             return AuditVerdict(False, "la respuesta no tiene evidencia recuperada")
-
+        if has_code_block(report.answer) and not code_was_executed(report.answer, report.evidence):
+            return AuditVerdict(False, "la respuesta incluye código que no se ejecutó tal cual con la herramienta "
+                                       "python; entrega solo código ejecutado y verificado con sus assert")
         out = self._llm.complete(
             AUDIT_PROMPT.format(question=report.question, answer=report.answer,
                                 evidence=format_evidence(report.evidence))

@@ -40,6 +40,8 @@ class FakeFlow:
 def test_parse_faithfulness_counts_supported_claims():
     assert parse_faithfulness("SI: a\nNO: b\n- SÍ: c\n2) no: d") == 0.5
     assert parse_faithfulness("SI: única") == 1.0
+    # formato real de Mistral: numerado, con el veredicto entre paréntesis y en inglés
+    assert parse_faithfulness("1. Janet tiene 16 huevos. (NO) - no está.\n2. Le quedan 9. (YES) - se infiere.") == 0.5
     assert parse_faithfulness("no pude evaluar") is None
 
 

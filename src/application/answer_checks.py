@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from domain.benchmark_item import BenchmarkItem
+from domain.evidence import Evidence
 from ports.code_runner_port import CodeRunnerPort
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
@@ -33,6 +35,10 @@ def numbers_match(answer: str, reference: str, tolerance: float = 1e-4) -> bool:
     return abs(got - float(expected[-1])) <= tolerance
 
 
+def has_code_block(text: str) -> bool:
+    return _FENCE.search(text) is not None
+
+
 def extract_code(text: str) -> str:
     """Primer bloque ```python``` del texto; si no hay bloques, el texto completo."""
     match = _FENCE.search(text)
@@ -45,3 +51,11 @@ def passes_tests(answer: str, item: BenchmarkItem, runner: CodeRunnerPort, timeo
         return False
     program = "\n".join([item.setup_code, extract_code(answer), *item.tests])
     return runner.run(program, timeout).ok
+
+
+def code_was_executed(answer: str, evidence: Sequence[Evidence]) -> bool:
+    """El primer bloque de código de la respuesta aparece tal cual en una ejecución exitosa de `python`."""
+    squash = lambda t: re.sub(r"\s+", "", t)
+    code = squash(extract_code(answer))
+    return any(e.source == "python" and code in squash(e.text) for e in evidence)
+

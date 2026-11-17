@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from application.answer_checks import has_code_block
 from application.prompts import REDACT_PROMPT
 from domain.report import Report
 from ports.llm_port import LLMPort
@@ -12,6 +13,9 @@ class Redactor:
         self._llm = llm
 
     def write(self, report: Report) -> str:
+        # El código ya fue ejecutado y auditado: reescribirlo con un LLM solo puede estropearlo.
+        if has_code_block(report.answer):
+            return report.answer
         sources = ", ".join(sorted({e.source for e in report.evidence})) or "ninguna"
         return self._llm.complete(
             REDACT_PROMPT.format(question=report.question, answer=report.answer, sources=sources)

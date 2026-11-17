@@ -9,6 +9,7 @@ from application.calculator import calculate
 from application.graph import build_flow
 from application.investigator import Investigator, parse_action
 from domain.benchmark_item import BenchmarkItem
+from domain.evidence import Evidence
 
 
 def test_calculate_handles_arithmetic_and_formats_results():
@@ -107,3 +108,50 @@ def test_flow_solves_a_math_question_with_calc():
     state = flow.invoke({"question": "Janet tiene 16 huevos..."})
     assert state["verdict"].approved
     assert numbers_match(state["final"], "9")
+
+
+def test_investigator_blocks_a_repeated_action_instead_of_looping():
+    llm = ScriptedLLM(["Action: kb[capital Perú]", "Action: kb[capital Perú]", "Final: Lima"])
+    kb = InMemoryKB([Evidence("wiki", "Lima es la capital del Perú.")])
+    report = Investigator(llm, StaticSearch([]), kb).run("capital Perú")
+
+    assert report.answer == "Lima"
+    assert len(report.evidence) == 1  # la repetición no volvió a ejecutar la herramienta
+    assert "No la repitas" in llm.prompts[2]
+
+
+def test_last_step_asks_for_a_final_answer():
+    llm = ScriptedLLM(["Action: calc[1+1]", "Final: 2"])
+    Investigator(llm, StaticSearch([]), InMemoryKB([]), max_steps=2).run("q")
+    assert "último paso" not in llm.prompts[0]
+    assert "último paso" in llm.prompts[1]
+
+
+def test_redactor_returns_code_untouched_instead_of_rewriting_it():
+    from application.redactor import Redactor
+    from domain.report import Report
+
+    llm = ScriptedLLM([])  # si el redactor llamara al LLM, ScriptedLLM fallaría
+    answer = "Final:\n```python\ndef add(a, b):\n    return a + b\n```"
+    assert Redactor(llm).write(Report("suma", answer, ())) == answer
+
+
+def test_investigator_warns_when_the_model_writes_several_actions():
+    llm = ScriptedLLM(["Action: calc[1+1]\nAction: calc[2+2]", "Final: 2"])
+    report = Investigator(llm, StaticSearch([]), InMemoryKB([])).run("q")
+    assert [e.text for e in report.evidence] == ["1+1 = 2"]
+    assert "Solo se ejecutó la primera Action" in llm.prompts[1]
+
+
+
+def test_auditor_rejects_code_that_was_never_executed_as_delivered():
+    from application.auditor import Auditor
+    from domain.report import Report
+
+    answer = "```python\ndef add(a, b):\n    return a + b\nassert add(1, 2) == 3\n```"
+    ran_only_the_def = (Evidence("python", "código:\ndef add(a, b):\n    return a + b\nsalida: (sin salida)"),)
+    verdict = Auditor(ScriptedLLM([])).review(Report("suma", answer, ran_only_the_def))
+    assert not verdict.approved and "no se ejecutó tal cual" in verdict.reason
+
+    ran_everything = (Evidence("python", "código:\ndef add(a, b):\n  return a + b\n\nassert add(1, 2) == 3\nsalida: ok"),)
+    assert Auditor(ScriptedLLM(["APROBADO"])).review(Report("suma", answer, ran_everything)).approved
