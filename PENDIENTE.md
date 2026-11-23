@@ -57,6 +57,18 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
   - [x] Verificar con `colab help exec` si existe modo en segundo plano y cómo pasar `HF_TOKEN` (`--env`); el README oficial no lo documenta.
     - `--env KEY=VALUE` funciona y `--timeout 0` quita el límite de silencio. No hay modo en segundo plano: se lanza el comando local en segundo plano. `echo '!cmd' | colab exec` se colgó una vez; usar `-f archivo.py`.
 
+## Mejoras de la entrega
+
+- [x] README reorganizado: diagrama del grafo, tablas y secciones navegables.
+- [x] Métricas de alucinación (`exactitud_respondidas`, `incorrectas_entregadas`) sin volver a correr: `scripts/resumir_resultados.py`.
+- [x] Análisis de errores consulta por consulta: `docs/analisis_errores.md` y `scripts/analisis_errores.py`.
+- [x] Resultados y conclusiones del README actualizados.
+- [x] Informe final en LaTeX: `informe/` (compila en Overleaf y con tectonic).
+  - [ ] Poner los nombres de los integrantes y el curso en `informe/main.tex` (marcado con `% EDITAR`).
+- [ ] Opcional: ablación del Auditor (`max_rounds=1`) y de `prefetch` (necesita GPU: Colab o la PC con la RTX 5070).
+- [ ] Opcional: guardar la evidencia en `EvalRecord` y volver a juzgar con un juez independiente (`JUDGE_BACKEND = "nvidia"`).
+- [ ] Opcional: `test_runner_limits_memory` falla en macOS (allí no se aplica `RLIMIT_AS`); en Linux y Colab pasa.
+
 ## Ya cumple
 
 - Grafo cíclico en LangGraph con 3 agentes: Investigador, Auditor y Redactor.
