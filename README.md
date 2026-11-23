@@ -52,18 +52,31 @@ Hay un grafo por tipo de tarea, cada uno con sus herramientas:
 
 50 consultas (20 de WikiQA, 15 de GSM8K y 15 de MBPP). Los dos métodos se corrieron sobre las mismas consultas y con el mismo juez, en una T4 con Mistral-7B de 4 bits.
 
-| método | respondidas | faithfulness | faithfulness (respondidas) | answer relevance | exactitud (GSM8K + MBPP) | s/consulta |
-|---|---|---|---|---|---|---|
-| **multi-agente** | 0.84 | 0.580 | **0.691** | 0.792 | **0.50** | 88.9 |
-| Naive RAG | 1.00 | **0.663** | 0.663 | **0.911** | 0.30 | 26.0 |
+**Métricas del juez (RAGAS, LLM-as-a-Judge), sobre las 50 consultas:**
 
-Por dataset, la exactitud es 0.33 contra 0.20 en GSM8K y 0.67 contra 0.40 en MBPP. En WikiQA la fidelidad es 0.605 contra 0.649 y la relevancia 0.88 contra 0.89.
+| método | respondidas | faithfulness | faithfulness (respondidas) | answer relevance | s/consulta |
+|---|---|---|---|---|---|
+| **multi-agente** | 0.84 | 0.580 | **0.691** | 0.792 | 88.9 |
+| Naive RAG | 1.00 | **0.663** | 0.663 | **0.911** | 26.0 |
 
-- **Dónde gana el multi-agente:** en la verificación objetiva, con 20 puntos más de exactitud. Acierta 8 consultas que el Naive RAG falla, y el Naive RAG acierta solo 2 que el multi-agente falla. También gana en fidelidad cuando responde.
-- **Dónde pierde:** en *Faithfulness* y *Answer Relevance* promediadas sobre las 50, porque sus 8 abstenciones (3 de GSM8K y 5 de MBPP) puntúan 0. En 7 de esas 8 consultas el Naive RAG entregó una respuesta incorrecta: el guardrail cambió respuestas equivocadas por abstenciones, y estas métricas premian responder algo.
-- **WikiQA:** casi empate. Varias respuestas cortas y correctas del multi-agente recibieron fidelidad de 0.1 a 0.15 (por ejemplo, "Holly Ridge, North Carolina is located in Onslow County."). Es posible que el juez de 7B rinda peor con el contexto más largo del multi-agente (6 a 10 fragmentos contra 3), pero no está comprobado.
+**Verificación objetiva, sobre las 30 consultas de GSM8K y MBPP:**
 
-Los datos están en [`results/`](results/): `tabla_comparativa.csv` (la tabla) y `evaluacion.jsonl` (un registro por consulta y método).
+| método | exactitud | exactitud al responder | respuestas incorrectas entregadas ↓ |
+|---|---|---|---|
+| **multi-agente** | **0.50** (15/30) | **0.68** (15/22) | **0.23** (7/30) |
+| Naive RAG | 0.30 (9/30) | 0.30 (9/30) | 0.70 (21/30) |
+
+Por dataset, la exactitud es 0.33 contra 0.20 en GSM8K y 0.67 contra 0.40 en MBPP. En MBPP el multi-agente no entregó **ningún** código incorrecto; el Naive RAG entregó 9. En WikiQA la fidelidad es 0.605 contra 0.649 y la relevancia 0.88 contra 0.89.
+
+### Conclusiones
+
+- **El multi-agente supera al Naive RAG donde la respuesta se puede verificar.** Tiene 20 puntos más de exactitud y entrega tres veces menos respuestas incorrectas (7 contra 21). Acierta 8 consultas que el Naive RAG falla, y el Naive RAG acierta 2 que el multi-agente no.
+- **El guardrail cambia errores por abstenciones.** En 7 de las 8 abstenciones del multi-agente, el Naive RAG entregó una respuesta incorrecta. Es lo que pide el enunciado: no propagar alucinaciones.
+- **El Auditor es tan bueno como su verificación.** En MBPP ejecuta el código y nunca aprobó un error, y en 2 consultas el error devuelto permitió corregir el código. En GSM8K depende del mismo 7B y aprobó 6 errores de razonamiento.
+- **Las métricas del juez favorecen al Naive RAG por dos razones.** Las abstenciones puntúan 0, y el juez de 7B casi no distingue una respuesta correcta de una incorrecta: les da *Answer Relevance* de 1.00 y 0.93 y *Faithfulness* de 0.74 y 0.69. Por eso la verificación objetiva es la evidencia más fuerte.
+- **Cautela estadística.** Con 10 pares discordantes, la ventaja en exactitud tiene p = 0.109 (McNemar exacto). Es consistente, pero no significativa al 5 % con 30 consultas.
+
+El detalle consulta por consulta está en [`docs/analisis_errores.md`](docs/analisis_errores.md). Los datos están en [`results/`](results/): `tabla_comparativa.csv` (la tabla) y `evaluacion.jsonl` (un registro por consulta y método). Si cambian las métricas, `python scripts/resumir_resultados.py` regenera la tabla sin volver a correr los modelos.
 
 ## Cómo ejecutarlo
 
@@ -112,9 +125,10 @@ src/
 └── adapters/      reales: MistralLocalLLM, NvidiaLLM, DuckDuckGoSearch, ChromaKB, HFDatasetAdapter,
                    SubprocessCodeRunner, JsonlResultStore
                    falsos (pruebas): ScriptedLLM, StaticSearch, InMemoryKB
+docs/              analisis_errores.md: revisión consulta por consulta de la corrida
 notebooks/         proyecto2.ipynb (para ejecutar) y proyecto2_output.ipynb (ejecutado en la T4)
 results/           resultados de la corrida de 50 consultas
-scripts/           colab_run.sh
+scripts/           colab_run.sh, resumir_resultados.py (regenera la tabla), analisis_errores.py
 tests/             pruebas offline
 ```
 
@@ -144,8 +158,10 @@ tests/             pruebas offline
 
 ## Limitaciones
 
-- Una sola corrida de 50 consultas.
-- El juez es un 7B y es el mismo modelo que responde, así que es ruidoso y puede favorecer sus propias respuestas.
+- Una sola corrida de 50 consultas. La ventaja en exactitud no es significativa al 5 % (p = 0.109).
+- El juez es un 7B y es el mismo modelo que responde, así que es ruidoso y puede favorecer sus propias respuestas. Casi no distingue respuestas correctas de incorrectas.
+- Los registros no guardan el texto de la evidencia ni el motivo de cada rechazo, así que no se puede volver a juzgar sin repetir la generación.
+- El verificador de GSM8K tiene un falso negativo conocido (GSM8K 5). La tabla usa la salida automática sin corregirla.
 - El multi-agente es unas 3,4 veces más lento que el Naive RAG.
 - `SubprocessCodeRunner` limita tiempo, CPU y memoria, pero no bloquea la red ni los archivos. Es aceptable porque la VM de Colab es desechable. En macOS el límite de memoria no se aplica.
 
