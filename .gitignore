@@ -7,3 +7,12 @@ chroma_db/
 .env
 .env.*
 !.env.example
+
+# LaTeX (informe/)
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz

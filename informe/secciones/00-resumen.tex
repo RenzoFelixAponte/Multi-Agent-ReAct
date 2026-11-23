@@ -1,0 +1,13 @@
+\begin{abstract}
+Presentamos un sistema multi-agente basado en el paradigma ReAct que coordina tres agentes en un grafo cíclico de LangGraph:
+un \emph{Investigador}, que razona y usa herramientas con el ciclo \emph{Thought $\rightarrow$ Action $\rightarrow$ Observation};
+un \emph{Auditor de Hechos}, que puede rechazar la respuesta y devolver el flujo con el motivo; y un \emph{Redactor}, que entrega la respuesta aprobada.
+El orquestador es Mistral-7B-Instruct-v0.3 cuantizado a 4 bits y ejecutado en una GPU Tesla T4.
+Las herramientas son una base vectorial ChromaDB sobre WikiQA, búsqueda web con DuckDuckGo, una calculadora segura y la ejecución aislada de Python.
+Sobre 50 consultas (20 de WikiQA, 15 de GSM8K y 15 de MBPP) comparamos el sistema con un Naive RAG de un solo paso.
+Medimos \emph{Faithfulness} y \emph{Answer Relevance} con LLM-as-a-Judge y, en GSM8K y MBPP, la corrección de forma objetiva.
+El multi-agente logra una exactitud de 0.50 frente a 0.30 y entrega tres veces menos respuestas incorrectas (7 frente a 21 de 30).
+En MBPP, donde el Auditor verifica ejecutando el código, no entregó ningún código erróneo.
+En cambio, obtiene menor fidelidad y relevancia promediadas, porque sus abstenciones puntúan cero y porque el juez de 7B casi no distingue una respuesta correcta de una incorrecta.
+Concluimos que un guardrail es tan bueno como la verificación en la que se apoya, y que las métricas de un juez débil deben complementarse con una verificación objetiva.
+\end{abstract}

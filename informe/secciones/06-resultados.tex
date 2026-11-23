@@ -1,0 +1,103 @@
+\section{Resultados}\label{sec:resultados}
+
+La tabla~\ref{tab:global} resume la corrida sobre las 50 consultas.
+La tabla~\ref{tab:dataset} la desglosa por dataset.
+
+\begin{table}[ht]
+\centering
+\caption{Resultados globales. Las métricas del juez promedian las 50 consultas; la verificación objetiva, las 30 de GSM8K y MBPP. En negrita, el mejor valor; $\downarrow$ indica que menor es mejor.}\label{tab:global}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Métrica & Multi-agente & Naive RAG \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Métricas del juez (50 consultas)}} \\
+\quad Respondidas & 0.84 & \textbf{1.00} \\
+\quad Faithfulness & 0.580 & \textbf{0.663} \\
+\quad Faithfulness (solo respondidas) & \textbf{0.691} & 0.663 \\
+\quad Answer Relevance & 0.792 & \textbf{0.911} \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Verificación objetiva (30 consultas)}} \\
+\quad Exactitud & \textbf{0.50} (15/30) & 0.30 (9/30) \\
+\quad Exactitud al responder & \textbf{0.68} (15/22) & 0.30 (9/30) \\
+\quad Incorrectas entregadas $\downarrow$ & \textbf{0.23} (7/30) & 0.70 (21/30) \\
+\midrule
+Rondas promedio & 1.40 & 1.00 \\
+Segundos por consulta & 88.9 & \textbf{26.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Resultados por dataset. WikiQA no tiene verificación objetiva.}\label{tab:dataset}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+Dataset & Método & Resp. & Faith. & Faith. (resp.) & Relev. & Exactitud & Incorr. entr. $\downarrow$ \\
+\midrule
+\multirow{2}{*}{WikiQA}
+ & Multi-agente & 1.00 & 0.605 & 0.605 & 0.88 & --- & --- \\
+ & Naive RAG    & 1.00 & 0.649 & 0.649 & 0.89 & --- & --- \\
+\midrule
+\multirow{2}{*}{GSM8K}
+ & Multi-agente & 0.80 & 0.679 & 0.849 & 0.80 & \textbf{0.33} & \textbf{0.47} \\
+ & Naive RAG    & 1.00 & 0.827 & 0.827 & 0.91 & 0.20 & 0.80 \\
+\midrule
+\multirow{2}{*}{MBPP}
+ & Multi-agente & 0.67 & 0.447 & 0.671 & 0.67 & \textbf{0.67} & \textbf{0.00} \\
+ & Naive RAG    & 1.00 & 0.519 & 0.519 & 0.95 & 0.40 & 0.60 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar, bar width=11pt, width=0.48\linewidth, height=5.2cm,
+  ymin=0, ymax=1.05, ylabel={Exactitud},
+  symbolic x coords={GSM8K,MBPP,Total}, xtick=data,
+  nodes near coords, nodes near coords style={font=\tiny},
+  every node near coord/.append style={/pgf/number format/fixed, /pgf/number format/precision=2, /pgf/number format/fixed zerofill},
+  legend style={at={(0.5,1.03)}, anchor=south, legend columns=2, font=\footnotesize, draw=none, /tikz/every even column/.append style={column sep=8pt}},
+  tick label style={font=\footnotesize}, label style={font=\footnotesize},
+  enlarge x limits=0.25,
+]
+\addplot[fill=multi, draw=multi] coordinates {(GSM8K,0.333) (MBPP,0.667) (Total,0.50)};
+\addplot[fill=naive, draw=naive] coordinates {(GSM8K,0.20) (MBPP,0.40) (Total,0.30)};
+\legend{Multi-agente, Naive RAG}
+\end{axis}
+\end{tikzpicture}\hfill
+\begin{tikzpicture}
+\begin{axis}[
+  ybar, bar width=11pt, width=0.48\linewidth, height=5.2cm,
+  ymin=0, ymax=1.05, ylabel={Incorrectas entregadas ($\downarrow$)},
+  symbolic x coords={GSM8K,MBPP,Total}, xtick=data,
+  nodes near coords, nodes near coords style={font=\tiny},
+  every node near coord/.append style={/pgf/number format/fixed, /pgf/number format/precision=2, /pgf/number format/fixed zerofill},
+  legend style={at={(0.5,1.03)}, anchor=south, legend columns=2, font=\footnotesize, draw=none, /tikz/every even column/.append style={column sep=8pt}},
+  tick label style={font=\footnotesize}, label style={font=\footnotesize},
+  enlarge x limits=0.25,
+]
+\addplot[fill=multi, draw=multi] coordinates {(GSM8K,0.467) (MBPP,0.0) (Total,0.233)};
+\addplot[fill=naive, draw=naive] coordinates {(GSM8K,0.80) (MBPP,0.60) (Total,0.70)};
+\legend{Multi-agente, Naive RAG}
+\end{axis}
+\end{tikzpicture}
+\caption{Verificación objetiva por dataset. Izquierda: fracción de consultas resueltas correctamente. Derecha: fracción de consultas con una respuesta entregada y errónea.}
+\label{fig:objetiva}
+\end{figure}
+
+\paragraph{Lectura de los resultados.}
+\begin{itemize}
+  \item \textbf{Verificación objetiva.} El multi-agente supera al Naive RAG en todos los indicadores (figura~\ref{fig:objetiva}).
+  Resuelve 15 de 30 consultas frente a 9, y entrega 7 respuestas incorrectas frente a 21.
+  En MBPP no entregó ningún código erróneo.
+  \item \textbf{Métricas del juez.} El Naive RAG obtiene mayor \emph{Faithfulness} y \emph{Answer Relevance} promediadas sobre las 50 consultas.
+  La diferencia se explica sobre todo por las 8 abstenciones del multi-agente (3 en GSM8K y 5 en MBPP), que puntúan 0.
+  Si se promedian solo las respuestas entregadas, el multi-agente es más fiel (0.691 frente a 0.663).
+  \item \textbf{WikiQA.} Los dos métodos casi empatan: fidelidad de 0.605 frente a 0.649 y relevancia de 0.88 frente a 0.89.
+  \item \textbf{Costo.} El multi-agente es unas 3.4 veces más lento, por las varias llamadas al LLM de cada consulta.
+\end{itemize}

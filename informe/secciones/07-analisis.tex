@@ -1,0 +1,94 @@
+\section{Análisis de errores}\label{sec:analisis}
+
+Las cifras de esta sección se reproducen con \code{scripts/analisis\_errores.py}, a partir del archivo con los 100 registros de la corrida.
+
+\subsection{Comparación consulta por consulta}
+
+\begin{table}[ht]
+\centering
+\caption{Resultado de cada método en las 30 consultas con verificación objetiva.}\label{tab:pares}
+\small
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Multi-agente & Naive RAG & GSM8K & MBPP & Total \\
+\midrule
+correcta   & correcta   & 1 & 6 & 7 \\
+correcta   & incorrecta & 4 & 4 & \textbf{8} \\
+incorrecta & correcta   & 1 & 0 & \textbf{1} \\
+incorrecta & incorrecta & 6 & 0 & 6 \\
+abstención & correcta   & 1 & 0 & 1 \\
+abstención & incorrecta & 2 & 5 & 7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La tabla~\ref{tab:pares} muestra que el multi-agente acierta 8 consultas que el Naive RAG falla.
+El Naive RAG acierta solo 2 que el multi-agente no acierta: una por error y otra por abstención.
+Con la prueba exacta de McNemar sobre esos 10 pares discordantes se obtiene $p = 0.109$.
+La dirección del efecto es consistente, pero 30 consultas no alcanzan para descartar el azar con un nivel de 0.05.
+
+Las abstenciones cumplen su propósito: en 7 de las 8, el Naive RAG entregó una respuesta incorrecta.
+El guardrail cambió respuestas equivocadas por abstenciones, que es exactamente lo que se busca para no propagar alucinaciones.
+
+\subsection{El Auditor es tan bueno como su verificación}
+
+\begin{table}[ht]
+\centering
+\caption{Qué pasó con las consultas que el Auditor rechazó al menos una vez.}\label{tab:auditor}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Dataset & Con rechazo & Corregidas & Abstenciones & Aprobadas pero incorrectas \\
+\midrule
+WikiQA & 1 de 20 & 1 & 0 & --- \\
+GSM8K  & 3 de 15 & 0 & 3 & 7 \\
+MBPP   & 7 de 15 & 2 & 5 & \textbf{0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La tabla~\ref{tab:auditor} contrasta los dos tipos de guardrail:
+\begin{itemize}
+  \item \textbf{MBPP (verificación determinista).} El Auditor ejecuta el código con sus pruebas y nunca aprobó un código erróneo.
+  En dos consultas el error de ejecución devuelto al Investigador le permitió corregir el código, en la segunda y en la tercera ronda.
+  El Naive RAG falló ambas.
+  \item \textbf{GSM8K (verificación con el LLM).} El Auditor solo puede leer el razonamiento, y el mismo modelo que se equivocó tiende a aprobar su propio error.
+  De las 7 respuestas aprobadas que el verificador marcó como incorrectas, 6 son errores de razonamiento y no de aritmética, porque \code{calc} calcula bien lo que se le pide.
+  Por ejemplo, interpreta ``el valor aumentó un 150\,\%'' como multiplicar por 1.5 en vez de por 2.5, o plantea bien la suma $160+80+20$ y luego responde 240 sin pasarla por \code{calc}.
+\end{itemize}
+
+\subsection{El juez frente a la verificación objetiva}
+
+Sobre las 52 respuestas entregadas en GSM8K y MBPP por ambos métodos, el juez asigna casi el mismo puntaje a las correctas que a las incorrectas (tabla~\ref{tab:juez}).
+
+\begin{table}[ht]
+\centering
+\caption{Puntaje promedio del juez según la verificación objetiva de la respuesta.}\label{tab:juez}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Respuestas & $n$ & Answer Relevance & Faithfulness \\
+\midrule
+Correctas   & 24 & 1.000 & 0.735 \\
+Incorrectas & 28 & 0.927 & 0.694 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+En \emph{Answer Relevance} esto es esperable, porque la métrica no juzga la veracidad.
+En \emph{Faithfulness} el juez también falla: un código correcto que pasó todas sus pruebas recibió fidelidad 0.0, y dos códigos incorrectos del Naive RAG recibieron 1.0.
+Con un juez de 7B estas métricas separan mal a los dos métodos.
+Por eso la verificación objetiva es la evidencia más sólida de la comparación.
+
+\subsection{Otros hallazgos}
+
+\begin{itemize}
+  \item \textbf{Falso negativo del verificador.} En una consulta de GSM8K el multi-agente respondió correctamente ``\$64'', pero el Redactor no escribió la línea \code{Respuesta final:} y el verificador tomó el último número del texto.
+  Se revisó a mano el número extraído en las 30 respuestas de GSM8K y es el único caso.
+  Los resultados reportados no se corrigieron; con la corrección, la exactitud del multi-agente en GSM8K sería 0.40 en vez de 0.33.
+  \item \textbf{Fidelidad baja en respuestas cortas de WikiQA.} Respuestas correctas como ``Holly Ridge, North Carolina is located in Onslow County.'' recibieron fidelidad de 0.12.
+  Las respuestas cortas del multi-agente promedian 0.48, frente a 0.71 de las largas.
+  La hipótesis más probable es que el juez rinde peor con el contexto más largo del multi-agente (7 fragmentos en promedio frente a 3), pero no se comprobó.
+  \item \textbf{Idioma.} El Redactor respondió en español a 7 de las 20 preguntas en inglés de WikiQA, probablemente porque su prompt está en español.
+  Este efecto no explica la fidelidad baja: esas respuestas puntúan más que las respuestas en inglés.
+\end{itemize}

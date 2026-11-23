@@ -1,0 +1,62 @@
+% Informe final: Sistema Multi-Agente ReAct
+% Compila con pdfLaTeX, XeLaTeX, LuaLaTeX o tectonic (ver informe/README.md).
+% Cada sección está en secciones/: editar ahí el contenido y aquí solo la portada.
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+\fi
+% es-noshorthands: sin él, babel vuelve activos < y > y rompe las flechas de TikZ.
+% es-nolists: conserva las viñetas estándar en vez de las de babel.
+\usepackage[spanish,es-noshorthands,es-nolists,es-tabla,es-nodecimaldot]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{fancyvrb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,babel}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage[hidelinks]{hyperref}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\captionsetup{font=small,labelfont=bf}
+\newcommand{\code}[1]{\texttt{#1}}
+\definecolor{multi}{HTML}{2E6DB4}
+\definecolor{naive}{HTML}{C8742B}
+
+\title{%
+  \textbf{Sistema Multi-Agente ReAct}\\[4pt]
+  \large Auditoría de respuestas con agentes, herramientas y guardrails\\
+  \large sobre WikiQA, GSM8K y MBPP}
+% EDITAR: nombres, códigos, curso y docente.
+\author{Integrante 1 \and Integrante 2 \and Integrante 3}
+\date{Procesamiento de Lenguaje Natural --- Proyecto Final\\[2pt] Noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\input{secciones/00-resumen}
+\input{secciones/01-introduccion}
+\input{secciones/02-marco}
+\input{secciones/03-datos}
+\input{secciones/04-arquitectura}
+\input{secciones/05-experimentos}
+\input{secciones/06-resultados}
+\input{secciones/07-analisis}
+\input{secciones/08-conclusiones}
+\input{secciones/09-referencias}
+
+\end{document}

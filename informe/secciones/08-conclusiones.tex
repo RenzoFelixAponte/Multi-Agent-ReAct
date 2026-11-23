@@ -1,0 +1,46 @@
+\section{Discusión y conclusiones}\label{sec:conclusiones}
+
+\paragraph{Cumplimiento de los objetivos.}
+El sistema implementa tres agentes con roles interdependientes en un grafo cíclico de LangGraph.
+El Investigador sigue el ciclo \emph{Thought $\rightarrow$ Action $\rightarrow$ Observation} con una base vectorial local (ChromaDB sobre WikiQA), búsqueda web (DuckDuckGo), una calculadora y un ejecutor de código.
+El Auditor rechaza de forma condicional y devuelve el flujo con el motivo, y las consultas independientes se ejecutan en paralelo.
+Todo corre con un modelo de 7B cuantizado a 4 bits en una T4.
+
+\paragraph{¿Supera el multi-agente al Naive RAG?}
+Donde la corrección se puede verificar, sí:
+\begin{itemize}
+  \item Logra 20 puntos más de exactitud (0.50 frente a 0.30).
+  \item Entrega tres veces menos respuestas incorrectas (7 frente a 21 de 30).
+  \item En MBPP no entregó ningún código erróneo.
+\end{itemize}
+En las métricas del juez promediadas sobre todas las consultas, no.
+Las abstenciones puntúan cero, y un juez de 7B apenas distingue una respuesta correcta de una incorrecta.
+Si se consideran solo las respuestas entregadas, el multi-agente es más fiel.
+
+\paragraph{Lecciones.}
+\begin{enumerate}
+  \item \textbf{Un guardrail vale lo que vale su verificación.} Ejecutar pruebas es un guardrail fuerte, y pedirle al mismo modelo que revise su razonamiento es uno débil.
+  Conviene usar verificaciones deterministas siempre que la tarea lo permita.
+  \item \textbf{Abstenerse es una salida válida.} En un contexto de auditoría, no responder es preferible a responder mal.
+  Las métricas que promedian incluyendo las abstenciones como cero castigan justamente ese comportamiento, así que deben acompañarse de métricas como las respuestas incorrectas entregadas.
+  \item \textbf{El juez condiciona la conclusión.} Con un juez débil y el mismo que responde, \emph{Faithfulness} y \emph{Answer Relevance} deben leerse con cautela.
+  \item \textbf{Un modelo de 7B necesita andamiaje.} La regla anti-repetición, los ejemplos resueltos por tarea, entregar el código realmente ejecutado y un Redactor que no reescribe fueron necesarios para que el flujo funcionara.
+\end{enumerate}
+
+\paragraph{Limitaciones.}
+\begin{itemize}
+  \item Es una sola corrida de 50 consultas, y la ventaja en exactitud no alcanza significancia al 5\,\% ($p = 0.109$).
+  \item El juez es el mismo modelo que responde.
+  \item Los registros no guardan el texto de la evidencia ni el motivo de cada rechazo, lo que impide volver a juzgar sin repetir la generación.
+  \item El multi-agente es unas 3.4 veces más lento.
+  \item El ejecutor de código limita tiempo, CPU y memoria, pero no aísla la red ni el sistema de archivos. Es aceptable en una máquina virtual desechable como la de Colab.
+\end{itemize}
+
+\paragraph{Trabajo futuro.}
+\begin{enumerate}
+  \item Usar un juez independiente y más fuerte.
+  \item Guardar la evidencia en cada registro para volver a juzgar sin volver a generar.
+  \item Hacer una ablación del Auditor (\code{max\_rounds}~$=1$) y de la recuperación en paralelo, para medir el aporte de cada componente.
+  \item Ampliar a unas 100 consultas con verificación objetiva para obtener significancia estadística.
+  \item Agregar en GSM8K una verificación determinista, por ejemplo pedir el planteamiento como una expresión que \code{calc} pueda reevaluar.
+\end{enumerate}

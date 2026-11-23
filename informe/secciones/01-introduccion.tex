@@ -1,0 +1,26 @@
+\section{Introducción}
+
+Los modelos de lenguaje de tamaño medio, como los de 7 a 8 mil millones de parámetros, pueden ejecutarse localmente en una sola GPU, pero alucinan con frecuencia: afirman datos que no están en su contexto, razonan mal en problemas de varios pasos y escriben código que no funciona.
+Un sistema de recuperación aumentada de un solo paso (\emph{Naive RAG}) mitiga el primer problema solo parcialmente y no ataca los otros dos.
+
+Este proyecto diseña e implementa un sistema multi-agente autónomo que combina razonamiento y acción (ReAct) con un mecanismo de control explícito.
+El objetivo no es solo responder, sino \emph{no propagar} respuestas sin respaldo.
+Para eso, un agente auditor revisa el trabajo del agente investigador y puede rechazarlo, devolviendo el flujo con el motivo del rechazo, o abstenerse tras varios intentos.
+
+Los objetivos concretos son:
+\begin{enumerate}
+  \item Definir al menos tres agentes con roles diferenciados en un grafo de control cíclico (LangGraph).
+  \item Integrar herramientas reales mediante la sintaxis \emph{Thought $\rightarrow$ Action $\rightarrow$ Observation}: una base vectorial local y búsqueda web, además de una calculadora y un ejecutor de código.
+  \item Implementar guardrails que permitan al Auditor rechazar de forma condicional el reporte del Investigador, y ejecutar en paralelo las consultas independientes.
+  \item Evaluar cuantitativamente el sistema sobre 50 consultas con \emph{Faithfulness} y \emph{Answer Relevance}, y compararlo con un Naive RAG.
+\end{enumerate}
+
+El resto del informe se organiza así:
+\begin{itemize}
+  \item La sección~\ref{sec:marco} resume los conceptos base.
+  \item La sección~\ref{sec:datos} describe los datos.
+  \item La sección~\ref{sec:arquitectura} presenta la arquitectura.
+  \item La sección~\ref{sec:experimentos} detalla la configuración experimental y las métricas.
+  \item Las secciones~\ref{sec:resultados} y~\ref{sec:analisis} presentan los resultados y el análisis de errores.
+  \item La sección~\ref{sec:conclusiones} concluye.
+\end{itemize}

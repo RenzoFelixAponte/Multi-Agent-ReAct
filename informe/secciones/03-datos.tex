@@ -1,0 +1,34 @@
+\section{Datos}\label{sec:datos}
+
+Se usan tres conjuntos públicos de Hugging Face, uno por tipo de tarea (tabla~\ref{tab:datos}).
+
+\begin{table}[ht]
+\centering
+\caption{Conjuntos de datos y uso en el proyecto.}\label{tab:datos}
+\small
+\begin{tabularx}{\linewidth}{@{}l l X c@{}}
+\toprule
+Dataset & Partición & Uso & Consultas \\
+\midrule
+WikiQA~\cite{wikiqa} & \code{validation} & Base de conocimiento en ChromaDB y preguntas abiertas & 20 \\
+GSM8K~\cite{gsm8k} & \code{test} & Problemas matemáticos de varios pasos; referencia numérica tras \code{\#\#\#\#} & 15 \\
+MBPP~\cite{mbpp} & \code{test} & Generación de funciones Python; verificación con \code{test\_list} & 15 \\
+\midrule
+\multicolumn{3}{@{}l}{Total} & 50 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Base de conocimiento.}
+WikiQA asocia cada pregunta con varias frases candidatas de Wikipedia, marcadas como correctas (\code{label=1}) o incorrectas (\code{label=0}).
+Se agrupan las filas por pregunta y se conservan las 126 preguntas de validación con al menos una frase correcta.
+Se indexan \emph{todas} sus frases candidatas: 1119 frases únicas, también las incorrectas.
+Indexar solo las correctas pondría la respuesta al alcance de cualquier recuperación y favorecería artificialmente al Naive RAG.
+Con las incorrectas, la base contiene distractores temáticamente cercanos.
+El índice es una colección persistente de ChromaDB con su función de embeddings por defecto.
+Los identificadores salen de un hash del contenido, así que reindexar no duplica documentos.
+
+\paragraph{Consultas de MBPP.}
+Siguiendo a Austin et al.~\cite{mbpp}, la pregunta incluye los \code{assert} de \code{test\_list} para que el modelo conozca el nombre y la firma de la función.
+Ambos métodos ven esas pruebas, pero solo el multi-agente puede ejecutarlas.
+Su exactitud en MBPP mide, por lo tanto, si sabe verificar y corregir su código, no si generaliza a pruebas ocultas.

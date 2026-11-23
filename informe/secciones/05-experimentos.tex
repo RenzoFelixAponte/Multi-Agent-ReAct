@@ -1,0 +1,58 @@
+\section{Configuración experimental}\label{sec:experimentos}
+
+\subsection{Modelo y hardware}
+
+El orquestador de los tres agentes es \code{mistralai/Mistral-7B-Instruct-v0.3}~\cite{mistral}, cuantizado a 4 bits (NF4~\cite{qlora}, con cómputo en \code{float16}) mediante \code{bitsandbytes}.
+Se ejecuta con \code{transformers} en una GPU Tesla T4 (16\,GB) de Google Colab.
+La decodificación es voraz (\code{do\_sample=False}), con hasta 512 tokens nuevos, y se detiene en la cadena \code{Observation:}.
+La corrida completa, de 100 registros (50 consultas con dos métodos), tomó unos 96 minutos.
+
+\subsection{Sistemas comparados}
+
+\begin{itemize}
+  \item \textbf{Multi-agente.} Es el grafo de la sección~\ref{sec:arquitectura}, con \code{max\_rounds}~$=3$ y hasta 6 pasos ReAct por ronda.
+  \item \textbf{Naive RAG.} Recupera 3 fragmentos de la misma base ChromaDB y hace una sola llamada al mismo modelo, sin herramientas ni auditoría.
+  En GSM8K y MBPP la base de WikiQA no aporta contexto útil, así que ahí la comparación es contra un modelo que razona sin herramientas.
+\end{itemize}
+
+Ambos sistemas reciben exactamente las mismas 50 preguntas y los evalúa el mismo juez.
+
+\subsection{Métricas}
+
+Sea $q$ una pregunta, $a$ la respuesta y $C$ el contexto del método: los fragmentos recuperados y, en el multi-agente, también las salidas de \code{calc} y \code{python}.
+
+\paragraph{Faithfulness.}
+El juez descompone $a$ en a lo sumo 8 afirmaciones atómicas $s_1,\dots,s_n$ y marca cada una como inferible (\code{SI}) o no (\code{NO}) a partir de $C$ y de los datos de $q$:
+\begin{equation}
+  \text{Faithfulness}(a, C) = \frac{\left|\{\,s_i : s_i \text{ se infiere de } C \cup q\,\}\right|}{n}.
+\end{equation}
+Los datos del enunciado cuentan como información dada porque en GSM8K y MBPP la respuesta los repite con razón.
+
+\paragraph{Answer Relevance.}
+El juez asigna un entero $r \in \{0,\dots,10\}$ según qué tan directamente $a$ responde $q$, sin juzgar si es verdadera, y se normaliza como $r/10$.
+Es una simplificación de RAGAS, que genera preguntas a partir de la respuesta y mide su similitud con la original.
+
+\paragraph{Verificación objetiva.}
+En GSM8K se extrae el número que sigue a \code{Respuesta final:} (o, si no existe esa línea, el último número del texto) y se compara con la referencia.
+En MBPP se ejecuta el código de la respuesta con sus \code{assert}.
+Sobre estas 30 consultas se reportan tres métricas:
+\begin{align}
+  \text{exactitud} &= \frac{\#\,\text{correctas}}{\#\,\text{consultas}}, \\
+  \text{exactitud al responder} &= \frac{\#\,\text{correctas}}{\#\,\text{respondidas}}, \\
+  \text{incorrectas entregadas} &= \frac{\#\,\text{respondidas e incorrectas}}{\#\,\text{consultas}}.
+\end{align}
+La última mide cuántas alucinaciones llegan al usuario: una abstención no cuenta como incorrecta.
+
+\paragraph{Abstenciones.}
+Si el Auditor nunca aprueba, el multi-agente no responde.
+Una abstención puntúa 0 en \emph{Faithfulness} y \emph{Answer Relevance}, y cuenta como no correcta en la exactitud.
+Para separar ``qué tan fiel es cuando responde'' de ``cuántas veces se abstiene'', se reporta además la fidelidad promediada solo sobre las respuestas entregadas.
+
+\paragraph{Juez.}
+El juez es el mismo Mistral-7B que orquesta.
+Así la evaluación cabe en la misma GPU, pero el juez es ruidoso y podría favorecer sus propias respuestas.
+Si el juez no devuelve el formato pedido se reintenta una vez; si vuelve a fallar, la métrica queda vacía y se cuenta aparte.
+
+\paragraph{Prueba estadística.}
+Para la exactitud se usa la prueba exacta de McNemar sobre los pares discordantes: las consultas que acierta un solo método.
+Es la prueba adecuada para dos clasificadores evaluados sobre las mismas muestras.

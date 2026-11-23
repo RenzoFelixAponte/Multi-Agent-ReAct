@@ -1,0 +1,20 @@
+\section{Marco conceptual}\label{sec:marco}
+
+\paragraph{ReAct.}
+Yao et al.~\cite{react} proponen intercalar trazas de razonamiento (\emph{Thought}) con acciones sobre el entorno (\emph{Action}), cuyo resultado (\emph{Observation}) se agrega al contexto antes del siguiente paso.
+Así el modelo puede buscar información, calcular o ejecutar código en vez de depender solo de lo que memorizó.
+
+\paragraph{Recuperación aumentada (RAG).}
+Un sistema RAG recupera fragmentos relevantes de una base de conocimiento y los agrega al prompt.
+En su forma más simple (\emph{Naive RAG}) hace una sola recuperación y una sola llamada al modelo, sin verificar la respuesta.
+
+\paragraph{Sistemas multi-agente y guardrails.}
+Dividir el trabajo entre agentes con roles distintos permite separar \emph{producir} una respuesta de \emph{verificarla}.
+Un guardrail es una regla de control que bloquea o devuelve una salida que no cumple ciertas condiciones.
+Puede ser determinista, como ejecutar pruebas unitarias, o basarse en otro modelo que juzga la salida.
+
+\paragraph{Evaluación con RAGAS y LLM-as-a-Judge.}
+RAGAS~\cite{ragas} define métricas sin referencia para sistemas RAG.
+La \emph{Faithfulness} es la fracción de afirmaciones de la respuesta que se pueden inferir del contexto recuperado.
+La \emph{Answer Relevance} mide qué tan directamente la respuesta atiende la pregunta.
+Ambas se calculan pidiéndole a un LLM que actúe como juez, de modo que heredan sus sesgos y su ruido.

@@ -8,7 +8,7 @@ Tres agentes coordinados por un grafo cíclico de **LangGraph** responden pregun
 | **Herramientas** | ChromaDB sobre WikiQA, DuckDuckGo, calculadora segura y ejecución aislada de Python |
 | **Datasets** | WikiQA, GSM8K y MBPP (Hugging Face) |
 | **Evaluación** | 50 consultas, *Faithfulness* y *Answer Relevance* con LLM-as-a-Judge, más verificación objetiva |
-| **Entregable** | [`notebooks/proyecto2_output.ipynb`](notebooks/proyecto2_output.ipynb), ejecutado en la T4 |
+| **Entregables** | [`notebooks/proyecto2_output.ipynb`](notebooks/proyecto2_output.ipynb) (ejecutado en la T4) e [`informe/main.pdf`](informe/main.pdf) |
 
 ## Contenido
 
@@ -126,6 +126,7 @@ src/
                    SubprocessCodeRunner, JsonlResultStore
                    falsos (pruebas): ScriptedLLM, StaticSearch, InMemoryKB
 docs/              analisis_errores.md: revisión consulta por consulta de la corrida
+informe/           informe final en LaTeX (main.tex, secciones/) y su PDF
 notebooks/         proyecto2.ipynb (para ejecutar) y proyecto2_output.ipynb (ejecutado en la T4)
 results/           resultados de la corrida de 50 consultas
 scripts/           colab_run.sh, resumir_resultados.py (regenera la tabla), analisis_errores.py
