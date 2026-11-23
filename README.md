@@ -1,71 +1,92 @@
-# Proyecto 2: Sistema Multi-Agente ReAct (arquitectura hexagonal)
+# Sistema Multi-Agente ReAct
 
-Tres agentes en un grafo cíclico de LangGraph: **Investigador** (bucle ReAct *Thought → Action → Observation*), **Auditor de Hechos** (guardrail que rechaza y devuelve el flujo) y **Redactor**. El orquestador es Mistral-7B-Instruct-v0.3 cuantizado a 4 bits en la T4 de Colab.
+Tres agentes coordinados por un grafo cíclico de **LangGraph** responden preguntas, resuelven problemas matemáticos y escriben código usando herramientas reales. El orquestador es **Mistral-7B-Instruct-v0.3 cuantizado a 4 bits**, ejecutado en una GPU Tesla T4 de Colab. Un Auditor de Hechos puede rechazar la respuesta del Investigador y devolverle el flujo con el motivo del rechazo.
 
+| | |
+|---|---|
+| **Agentes** | Investigador (ReAct), Auditor de Hechos (guardrail), Redactor |
+| **Herramientas** | ChromaDB sobre WikiQA, DuckDuckGo, calculadora segura y ejecución aislada de Python |
+| **Datasets** | WikiQA, GSM8K y MBPP (Hugging Face) |
+| **Evaluación** | 50 consultas, *Faithfulness* y *Answer Relevance* con LLM-as-a-Judge, más verificación objetiva |
+| **Entregable** | [`notebooks/proyecto2_output.ipynb`](notebooks/proyecto2_output.ipynb), ejecutado en la T4 |
+
+## Contenido
+
+- [Arquitectura](#arquitectura)
+- [Resultados](#resultados)
+- [Cómo ejecutarlo](#cómo-ejecutarlo)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Decisiones de diseño](#decisiones-de-diseño)
+- [Limitaciones](#limitaciones)
+- [Referencias](#referencias)
+
+## Arquitectura
+
+```mermaid
+flowchart LR
+    S([inicio]) --> KB[kb: ChromaDB]
+    S --> WEB[web: DuckDuckGo]
+    KB --> I
+    WEB --> I
+    I["Investigador<br/>Thought → Action → Observation"] --> A{"Auditor<br/>de Hechos"}
+    A -- aprobado --> R[Redactor] --> E([fin])
+    A -- "rechazo + motivo" --> F[feedback] --> I
+    A -- "max_rounds rechazos" --> X([abstención])
 ```
-        ┌─ kb ──┐
-inicio ─┤       ├─> Investigador ─> Auditor ─┬─ aprobado ──> Redactor ─> fin
-        └─ web ─┘        ^                   │
-      (en paralelo)      └─── rechazo + motivo (hasta max_rounds)
-```
 
-Herramientas del Investigador: `kb[...]` (ChromaDB sobre WikiQA), `web[...]` (DuckDuckGo), `calc[...]` (GSM8K) y `python[...]` (MBPP, en un proceso aislado con tiempo y memoria limitados).
+1. **Recuperación en paralelo.** `kb` y `web` se consultan a la vez (fan-out de LangGraph) y el Investigador arranca con esa evidencia. Si una rama falla, la otra sigue.
+2. **Investigador.** Ejecuta un bucle ReAct de hasta 6 pasos. En cada paso el LLM escribe un `Thought` y una `Action`, y solo el sistema escribe la `Observation`.
+3. **Auditor de Hechos.** Primero aplica reglas deterministas: rechaza si no hay respuesta o no hay evidencia, y en código **ejecuta** la respuesta con los `assert` del enunciado. Después le pide al LLM que verifique si la evidencia respalda la respuesta.
+4. **Retroalimentación.** Si rechaza, el motivo y la respuesta rechazada vuelven al Investigador. Tras `max_rounds = 3` rechazos el sistema se abstiene en vez de entregar una respuesta sin respaldo.
+5. **Redactor.** Reformula la respuesta aprobada sin agregar datos. El código ya verificado lo entrega sin cambios.
 
-## Estructura
+Hay un grafo por tipo de tarea, cada uno con sus herramientas:
 
-```
-src/
-├── domain/        # entidades puras, una por archivo: Evidence, Report, BenchmarkItem, AuditVerdict,
-│                  #   ExecutionResult, EvalRecord
-├── ports/         # contratos (Protocol): LLMPort, WebSearchPort, KnowledgeBasePort, DatasetPort,
-│                  #   CodeRunnerPort, ResultStorePort
-├── application/   # núcleo: Investigator, Auditor, Redactor, build_flow, naive_rag
-│                  #   herramientas: calculator, answer_checks
-│                  #   evaluación: Judge, Evaluator, eval_set, eval_summary
-│                  #   prompts.py y formatting.py tienen las plantillas y el formato, sin lógica
-└── adapters/      # implementaciones, una clase por archivo:
-                   #   reales: MistralLocalLLM, NvidiaLLM, DuckDuckGoSearch, ChromaKB, HFDatasetAdapter,
-                   #           SubprocessCodeRunner, JsonlResultStore
-                   #   falsas (pruebas): ScriptedLLM, StaticSearch, InMemoryKB
-                   #   utilidades: dotenv_loader, hf_mappers
-notebooks/         # proyecto2.ipynb: dibuja el grafo, ejecuta el flujo y la evaluación
-tests/             # pruebas offline con adaptadores falsos
-```
+| Tarea | Dataset | Herramientas | Cómo audita |
+|---|---|---|---|
+| `qa` | WikiQA | `kb[...]`, `web[...]` | El LLM compara la respuesta con la evidencia |
+| `math` | GSM8K | `calc[...]` | El LLM revisa que el número responda lo que se pregunta |
+| `code` | MBPP | `python[...]` | Ejecuta el código con sus pruebas, sin preguntarle al LLM |
 
-El núcleo (`domain` y `application`) solo importa puertos. Cambiar Mistral por otro LLM, o ChromaDB por FAISS, es reemplazar un adaptador.
+## Resultados
 
-## Decisiones de diseño
-
-- **Concurrencia:** `build_flow(..., prefetch=True)` consulta `kb` y `web` a la vez (fan-out de LangGraph, con un reductor que une la evidencia) antes del bucle ReAct. Una rama caída no tumba a la otra.
-- **Un grafo por tarea:** `build_flow(..., task="qa" | "math" | "code")` elige las herramientas (`kb`+`web`, `calc` o `python`), el ejemplo resuelto del prompt ReAct y las reglas del Auditor y del Redactor. GSM8K y MBPP no tienen la web: no aporta y podría devolver la solución publicada del propio benchmark.
-- **Guardrail:** el Auditor rechaza sin evidencia (regla determinista) o cuando el LLM no encuentra respaldo. En código no le pregunta a un LLM: **ejecuta** el código entregado con los `assert` del enunciado y, si falla, devuelve el error. El motivo y la respuesta rechazada vuelven al Investigador. Tras `max_rounds` rechazos el flujo termina sin respuesta (abstención).
-- **Código entregado = código ejecutado:** si el Investigador dice que su código pasó las pruebas pero no lo copia en `Final`, se entrega el que realmente ejecutó, y el Redactor no reescribe código ya verificado.
-- **Idioma:** el Investigador busca y responde en el idioma de la pregunta; la base y la web están en inglés, y las búsquedas en español recuperaban fragmentos irrelevantes.
-- **Redactor sin relleno:** solo reformula la respuesta verificada, sin agregar datos ni listas de fuentes; en la prueba con la T4 inventaba explicaciones que bajaban la fidelidad.
-- **Límites del 7B (medidos en la T4):** repite la misma `Action` en bucle (por eso hay una regla anti-repetición, un ejemplo en el prompt y un último paso que exige `Final`), a veces razona mal aunque `calc` le dé el resultado correcto, y como juez casi siempre da 10/10 en *Answer Relevance*. Ningún guardrail determinista arregla un error de razonamiento.
-- **Base de conocimiento:** se indexan todas las frases candidatas de WikiQA, también las incorrectas, para que el Naive RAG no parta con ventaja.
-- **Evaluación:** *Faithfulness* y *Answer Relevance* con las definiciones de RAGAS, implementadas como LLM-as-a-Judge (sin la librería `ragas`). GSM8K (número final) y MBPP (`test_list`) además se verifican de forma objetiva. Las abstenciones puntúan 0; `faithfulness_respondidas` promedia solo las respuestas entregadas. El juez y el Naive RAG son los mismos para los dos métodos.
-- **MBPP:** ambos métodos ven los `assert` en la pregunta (como en Austin et al., 2021), pero solo el multi-agente puede ejecutarlos. Como son las mismas pruebas que se evalúan, su `exactitud` mide si sabe verificar y corregir su código, no si generaliza a pruebas ocultas.
-- **Juez:** por defecto es el mismo Mistral de 7B que orquesta (`JUDGE_BACKEND = "same"` en el notebook); un 7B como juez es ruidoso y puede favorecer sus propias respuestas. Se puede usar un juez remoto con `JUDGE_BACKEND = "nvidia"`. Los formatos inválidos del juez se cuentan en `juez_fallido`.
-- **Código ejecutado:** `SubprocessCodeRunner` limita tiempo, CPU y memoria, pero no bloquea la red ni los archivos; es aceptable porque la VM de Colab es desechable.
-
-## Resultados (50 consultas, Mistral-7B de 4 bits en una T4)
-
-Una corrida: 20 WikiQA + 15 GSM8K + 15 MBPP, los dos métodos sobre las mismas consultas y con el mismo juez. El notebook ejecutado está en `notebooks/proyecto2_output.ipynb`; la tabla y cada registro están en `results/`.
+50 consultas (20 de WikiQA, 15 de GSM8K y 15 de MBPP). Los dos métodos se corrieron sobre las mismas consultas y con el mismo juez, en una T4 con Mistral-7B de 4 bits.
 
 | método | respondidas | faithfulness | faithfulness (respondidas) | answer relevance | exactitud (GSM8K + MBPP) | s/consulta |
 |---|---|---|---|---|---|---|
-| multi-agente | 0.84 | 0.580 | **0.691** | 0.792 | **0.50** | 88.9 |
+| **multi-agente** | 0.84 | 0.580 | **0.691** | 0.792 | **0.50** | 88.9 |
 | Naive RAG | 1.00 | **0.663** | 0.663 | **0.911** | 0.30 | 26.0 |
 
-Por dataset, la exactitud es 0.33 contra 0.20 en GSM8K y 0.67 contra 0.40 en MBPP; en WikiQA la fidelidad es 0.605 contra 0.649 y la relevancia 0.88 contra 0.89.
+Por dataset, la exactitud es 0.33 contra 0.20 en GSM8K y 0.67 contra 0.40 en MBPP. En WikiQA la fidelidad es 0.605 contra 0.649 y la relevancia 0.88 contra 0.89.
 
-- **Dónde gana el multi-agente:** en la verificación objetiva (+20 puntos de exactitud: acierta 8 consultas que el Naive RAG falla, contra 2 al revés) y en fidelidad cuando responde.
+- **Dónde gana el multi-agente:** en la verificación objetiva, con 20 puntos más de exactitud. Acierta 8 consultas que el Naive RAG falla, y el Naive RAG acierta solo 2 que el multi-agente falla. También gana en fidelidad cuando responde.
 - **Dónde pierde:** en *Faithfulness* y *Answer Relevance* promediadas sobre las 50, porque sus 8 abstenciones (3 de GSM8K y 5 de MBPP) puntúan 0. En 7 de esas 8 consultas el Naive RAG entregó una respuesta incorrecta: el guardrail cambió respuestas equivocadas por abstenciones, y estas métricas premian responder algo.
 - **WikiQA:** casi empate. Varias respuestas cortas y correctas del multi-agente recibieron fidelidad de 0.1 a 0.15 (por ejemplo, "Holly Ridge, North Carolina is located in Onslow County."). Es posible que el juez de 7B rinda peor con el contexto más largo del multi-agente (6 a 10 fragmentos contra 3), pero no está comprobado.
-- **Límites:** una sola corrida, 50 consultas y un juez de 7B (el mismo modelo que responde). El multi-agente es unas 3,4 veces más lento.
 
-## Pruebas locales
+Los datos están en [`results/`](results/): `tabla_comparativa.csv` (la tabla) y `evaluacion.jsonl` (un registro por consulta y método).
+
+## Cómo ejecutarlo
+
+### En Colab desde el navegador (recomendado)
+
+1. Abrir [`notebooks/proyecto2.ipynb`](notebooks/proyecto2.ipynb) en Colab con GPU T4.
+2. Aceptar los términos de [Mistral-7B-Instruct-v0.3](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3) en Hugging Face (es un modelo restringido) y guardar el token como `HF_TOKEN` en *Secrets*.
+3. Ejecutar todo. La evaluación completa toma unos 96 minutos.
+
+Cada resultado se guarda en `results/evaluacion.jsonl` apenas se calcula. Si la sesión se corta, al volver a ejecutar la celda se reanuda donde quedó.
+
+### En Colab desde la terminal
+
+Con la [Colab CLI](https://github.com/googlecolab/google-colab-cli). El primer comando abre el login OAuth en el navegador.
+
+```bash
+HF_TOKEN=hf_... scripts/colab_run.sh              # corrida completa
+FULL_RUN=0 HF_TOKEN=hf_... scripts/colab_run.sh   # solo la prueba de tiempo
+```
+
+El script crea una sesión con T4, sube `src/`, ejecuta el notebook, baja los resultados a `results/` y cierra la sesión. La salida queda en `notebooks/proyecto2_output.ipynb`.
+
+### Pruebas locales (sin GPU ni red)
 
 ```bash
 uv venv --python 3.12 .venv
@@ -73,23 +94,65 @@ uv pip install --python .venv/bin/python langgraph datasets pytest
 .venv/bin/python -m pytest -q
 ```
 
-Las pruebas no necesitan GPU ni red. Para correr el notebook sin GPU, `BACKEND = "nvidia"` usa la API remota (`NVIDIA_API_KEY` en `.env`, ver `.env.example`).
+Las pruebas usan adaptadores falsos (`ScriptedLLM`, `StaticSearch`, `InMemoryKB`). Para correr el notebook sin GPU, `BACKEND = "nvidia"` usa una API remota (`NVIDIA_API_KEY` en `.env`, ver `.env.example`).
 
-## Ejecutar en Colab (T4)
+## Estructura del repositorio
 
-Desde el navegador: abrir `notebooks/proyecto2.ipynb` en Colab con GPU T4, poner `HF_TOKEN` en *Secrets* (Mistral es un modelo restringido: hay que aceptar sus términos en Hugging Face) y ejecutar todo.
+Arquitectura hexagonal: el núcleo (`domain` y `application`) solo importa puertos. Cambiar Mistral por otro LLM, o ChromaDB por FAISS, es reemplazar un adaptador.
 
-Desde la terminal con la [Colab CLI](https://github.com/googlecolab/google-colab-cli) (el primer comando abre el login OAuth en el navegador):
-
-```bash
-HF_TOKEN=hf_... scripts/colab_run.sh              # corrida completa
-FULL_RUN=0 HF_TOKEN=hf_... scripts/colab_run.sh   # solo la prueba de tiempo
+```text
+src/
+├── domain/        entidades puras: Evidence, Report, BenchmarkItem, AuditVerdict, ExecutionResult, EvalRecord
+├── ports/         contratos (Protocol): LLMPort, WebSearchPort, KnowledgeBasePort, DatasetPort,
+│                  CodeRunnerPort, ResultStorePort
+├── application/   agentes: Investigator, Auditor, Redactor, build_flow (grafo), naive_rag (baseline)
+│                  herramientas: calculator, answer_checks
+│                  evaluación: Judge, Evaluator, eval_set, eval_summary
+│                  prompts.py y formatting.py: plantillas y formato, sin lógica
+└── adapters/      reales: MistralLocalLLM, NvidiaLLM, DuckDuckGoSearch, ChromaKB, HFDatasetAdapter,
+                   SubprocessCodeRunner, JsonlResultStore
+                   falsos (pruebas): ScriptedLLM, StaticSearch, InMemoryKB
+notebooks/         proyecto2.ipynb (para ejecutar) y proyecto2_output.ipynb (ejecutado en la T4)
+results/           resultados de la corrida de 50 consultas
+scripts/           colab_run.sh
+tests/             pruebas offline
 ```
 
-El script crea una sesión con T4, sube `src/`, ejecuta el notebook (la salida queda en `notebooks/proyecto2_output.ipynb`), baja los resultados a `results/` y cierra la sesión.
+## Decisiones de diseño
 
-La corrida guarda cada resultado en `results/evaluacion.jsonl`; si se corta, volver a ejecutarla reanuda donde quedó.
+### Agentes y herramientas
 
-## Pendiente
+- **Un grafo por tarea.** `build_flow(..., task="qa" | "math" | "code")` elige las herramientas, el ejemplo resuelto del prompt ReAct y las reglas del Auditor y del Redactor. GSM8K y MBPP no tienen acceso a la web: no aporta y podría devolver la solución publicada del propio benchmark.
+- **Concurrencia.** Con `prefetch=True`, `kb` y `web` se consultan a la vez y un reductor de LangGraph une la evidencia. `tests/test_concurrency.py` lo comprueba con una barrera.
+- **Código entregado = código ejecutado.** Si el Investigador dice que su código pasó las pruebas pero no lo copia en `Final`, se entrega el código que realmente ejecutó. El Redactor no reescribe código ya verificado.
+- **Redactor sin relleno.** Solo reformula la respuesta verificada, sin agregar datos ni listas de fuentes. En la prueba con la T4 inventaba explicaciones que bajaban la fidelidad.
+- **Idioma.** El Investigador busca en el idioma de la pregunta. La base y la web están en inglés, y las búsquedas en español recuperaban fragmentos irrelevantes.
 
-Ver `PENDIENTE.md`.
+### Límites del 7B, medidos en la T4
+
+- Repite la misma `Action` en bucle. Por eso hay una regla anti-repetición, un ejemplo resuelto en el prompt y un último paso que exige `Final`.
+- A veces razona mal aunque `calc` le dé el resultado correcto. Ningún guardrail determinista arregla un error de razonamiento.
+- Como juez, casi siempre da 10/10 en *Answer Relevance*.
+
+### Evaluación
+
+- ***Faithfulness* y *Answer Relevance*** siguen las definiciones de RAGAS, implementadas como LLM-as-a-Judge, sin la librería `ragas`. GSM8K (número final) y MBPP (`test_list`) además se verifican de forma objetiva.
+- **Abstenciones.** Puntúan 0. `faithfulness_respondidas` promedia solo las respuestas entregadas.
+- **Base de conocimiento.** Se indexan todas las frases candidatas de WikiQA, también las incorrectas, para que el Naive RAG no parta con ventaja (126 preguntas y 1119 frases).
+- **Juez.** Por defecto es el mismo Mistral que orquesta (`JUDGE_BACKEND = "same"`). Se puede usar un juez remoto con `JUDGE_BACKEND = "nvidia"`. Los formatos inválidos del juez se cuentan en `juez_fallido`.
+- **MBPP.** Los dos métodos ven los `assert` en la pregunta, como en Austin et al. (2021), pero solo el multi-agente puede ejecutarlos. Su exactitud mide si sabe verificar y corregir su código, no si generaliza a pruebas ocultas.
+
+## Limitaciones
+
+- Una sola corrida de 50 consultas.
+- El juez es un 7B y es el mismo modelo que responde, así que es ruidoso y puede favorecer sus propias respuestas.
+- El multi-agente es unas 3,4 veces más lento que el Naive RAG.
+- `SubprocessCodeRunner` limita tiempo, CPU y memoria, pero no bloquea la red ni los archivos. Es aceptable porque la VM de Colab es desechable. En macOS el límite de memoria no se aplica.
+
+## Referencias
+
+- Yao, S., et al. (2023). *ReAct: Synergizing Reasoning and Acting in Language Models*. ICLR 2023.
+- Yang, Y., et al. (2015). *WikiQA: A Challenge Dataset for Open-Domain Question Answering*. EMNLP 2015.
+- Cobbe, K., et al. (2021). *Training Verifiers to Solve Math Word Problems*. arXiv:2110.14168.
+- Austin, J., et al. (2021). *Program Synthesis with Large Language Models*. arXiv:2108.07732.
+- Es, S., et al. (2024). *RAGAS: Automated Evaluation of Retrieval Augmented Generation*. EACL 2024.
