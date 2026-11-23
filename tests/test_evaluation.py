@@ -170,6 +170,20 @@ def test_summarize_groups_by_method_and_dataset_with_overall_row():
     gsm = table[(MULTIAGENT, "gsm8k")]
     assert (gsm["n"], gsm["respondidas"], gsm["faithfulness"], gsm["exactitud"]) == (2, 0.5, 0.5, 0.5)
     assert gsm["faithfulness_respondidas"] == 1.0  # la abstención no entra en este promedio
+    assert gsm["exactitud_respondidas"] == 1.0 and gsm["incorrectas_entregadas"] == 0.0
     everything = table[(MULTIAGENT, "todos")]
     assert everything["n"] == 3 and everything["faithfulness"] == pytest.approx(0.5)
     assert table[(NAIVE, "todos")]["exactitud"] is None
+
+
+def test_wrong_delivered_answers_count_apart_from_abstentions():
+    records = [
+        EvalRecord("gsm8k", "0", NAIVE, "q", "a", True, 0.5, 1.0, True),
+        EvalRecord("gsm8k", "1", NAIVE, "q", "a", True, 0.5, 1.0, False),
+        EvalRecord("gsm8k", "2", NAIVE, "q", "a", True, 0.5, 1.0, False),
+        EvalRecord("gsm8k", "3", NAIVE, "q", "", False, 0.0, 0.0, False),
+    ]
+    row = {r["dataset"]: r for r in summarize(records)}["gsm8k"]
+    assert row["exactitud"] == 0.25
+    assert row["exactitud_respondidas"] == pytest.approx(0.333)
+    assert row["incorrectas_entregadas"] == 0.5  # la abstención no es una respuesta incorrecta

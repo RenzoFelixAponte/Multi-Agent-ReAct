@@ -29,6 +29,8 @@ def _row(method: str, dataset: str, group: list[EvalRecord]) -> dict:
                                            if r.answered and r.faithfulness is not None]),
         "answer_relevance": _mean([r.relevance for r in valid if r.relevance is not None]),
         "exactitud": _mean([float(r.correct) for r in with_truth]),
+        "exactitud_respondidas": _mean([float(r.correct) for r in with_truth if r.answered]),
+        "incorrectas_entregadas": _mean([float(r.answered and not r.correct) for r in with_truth]),
         "rondas": _mean([float(r.rounds) for r in valid]),
         "seg_por_consulta": _mean([r.seconds for r in valid]),
         "errores": len(group) - len(valid),
@@ -43,6 +45,10 @@ def summarize(records: Iterable[EvalRecord]) -> list[dict]:
     `faithfulness_respondidas` promedia solo las respuestas entregadas: separa "qué tan fiel es
     cuando responde" de "cuántas veces se abstiene".
     `exactitud` solo cuenta GSM8K (número final) y MBPP (pruebas unitarias), que tienen verificación objetiva.
+    Sobre esas mismas consultas, `exactitud_respondidas` es la fracción correcta entre las respuestas
+    entregadas, e `incorrectas_entregadas` la fracción de consultas con una respuesta entregada y
+    errónea (menor es mejor). Una abstención no cuenta como incorrecta: separa "se equivocó" de
+    "prefirió no responder", que es lo que busca el guardrail.
     """
     rows = latest(records)
     table: list[dict] = []
