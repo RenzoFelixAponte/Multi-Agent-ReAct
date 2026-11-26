@@ -83,21 +83,24 @@ El detalle consulta por consulta está en [`docs/analisis_errores.md`](docs/anal
 ### En Colab desde el navegador (recomendado)
 
 1. Abrir [`notebooks/proyecto2.ipynb`](notebooks/proyecto2.ipynb) en Colab con GPU T4.
-2. Aceptar los términos de [Mistral-7B-Instruct-v0.3](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3) en Hugging Face (es un modelo restringido) y guardar el token como `HF_TOKEN` en *Secrets*.
-3. Ejecutar todo. La evaluación completa toma unos 96 minutos.
+2. Guardar `NVIDIA_API_KEY` en *Secrets*: el juez es un modelo remoto de NVIDIA. Con `JUDGE_BACKEND = "same"` el juez es el mismo modelo local y no hace falta la key.
+3. Ejecutar todo. Con Mistral-7B y el juez local, la evaluación completa tomó unos 96 minutos.
 
-Cada resultado se guarda en `results/evaluacion.jsonl` apenas se calcula. Si la sesión se corta, al volver a ejecutar la celda se reanuda donde quedó.
+El orquestador por defecto es [Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct), que no es restringido. Para repetir la primera corrida con [Mistral-7B-Instruct-v0.3](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3) hay que aceptar sus términos en Hugging Face y guardar el token como `HF_TOKEN`.
+
+Cada resultado se guarda en `results/<corrida>/evaluacion.jsonl` apenas se calcula, con la evidencia que vio el juez. Si la sesión se corta, al volver a ejecutar la celda se reanuda donde quedó. Si el juez remoto falla, `python scripts/rejuzgar.py results/<corrida>/evaluacion.jsonl` juzga lo que falte sin volver a generar.
 
 ### En Colab desde la terminal
 
 Con la [Colab CLI](https://github.com/googlecolab/google-colab-cli). El primer comando abre el login OAuth en el navegador.
 
 ```bash
-HF_TOKEN=hf_... scripts/colab_run.sh              # corrida completa
-FULL_RUN=0 HF_TOKEN=hf_... scripts/colab_run.sh   # solo la prueba de tiempo
+scripts/colab_run.sh                # corrida completa: Qwen2.5-7B y juez de NVIDIA
+FULL_RUN=0 scripts/colab_run.sh     # solo la prueba de tiempo
+MODEL_ID=mistralai/Mistral-7B-Instruct-v0.3 JUDGE_BACKEND=same scripts/colab_run.sh   # como la primera corrida
 ```
 
-El script crea una sesión con T4, sube `src/`, ejecuta el notebook, baja los resultados a `results/` y cierra la sesión. La salida queda en `notebooks/proyecto2_output.ipynb`.
+Las keys (`NVIDIA_API_KEY`, `HF_TOKEN`) se toman del entorno o del `.env`. El script crea una sesión con T4, sube `src/`, ejecuta el notebook, baja los resultados a `results/<corrida>/` y cierra la sesión. La salida queda en `notebooks/proyecto2_output.ipynb`.
 
 ### Pruebas locales (sin GPU ni red)
 
@@ -122,14 +125,14 @@ src/
 │                  herramientas: calculator, answer_checks
 │                  evaluación: Judge, Evaluator, eval_set, eval_summary
 │                  prompts.py y formatting.py: plantillas y formato, sin lógica
-└── adapters/      reales: MistralLocalLLM, NvidiaLLM, DuckDuckGoSearch, ChromaKB, HFDatasetAdapter,
+└── adapters/      reales: LocalLLM, NvidiaLLM, DuckDuckGoSearch, ChromaKB, HFDatasetAdapter,
                    SubprocessCodeRunner, JsonlResultStore
                    falsos (pruebas): ScriptedLLM, StaticSearch, InMemoryKB
 docs/              analisis_errores.md: revisión consulta por consulta de la corrida
 informe/           informe final en LaTeX (main.tex, secciones/) y su PDF
 notebooks/         proyecto2.ipynb (para ejecutar) y proyecto2_output.ipynb (ejecutado en la T4)
 results/           resultados de la corrida de 50 consultas
-scripts/           colab_run.sh, resumir_resultados.py (regenera la tabla), analisis_errores.py
+scripts/           colab_run.sh, resumir_resultados.py (regenera la tabla), rejuzgar.py, analisis_errores.py
 tests/             pruebas offline
 ```
 

@@ -1,13 +1,17 @@
-"""LLM local Mistral-7B cuantizado en 4 bits (bitsandbytes). Pensado para la T4 de Colab.
+"""LLM local de 7-8B cuantizado en 4 bits (bitsandbytes). Pensado para la T4 de Colab.
 
-Mistral-7B-Instruct-v0.3 es un modelo restringido en Hugging Face: hay que aceptar sus términos con
-la cuenta dueña del token y exponer ese token como la variable de entorno HF_TOKEN.
+Sirve para cualquier modelo instruct de Hugging Face con plantilla de chat. Por defecto usa
+Qwen2.5-7B-Instruct; la primera corrida usó Mistral-7B-Instruct-v0.3. Los modelos restringidos
+(Mistral, Llama) exigen aceptar sus términos con la cuenta dueña del token y exponerlo como HF_TOKEN.
 """
 from __future__ import annotations
 
 
-class MistralLocalLLM:
-    def __init__(self, model_id: str = "mistralai/Mistral-7B-Instruct-v0.3", max_new_tokens: int = 512,
+DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+
+
+class LocalLLM:
+    def __init__(self, model_id: str = DEFAULT_MODEL, max_new_tokens: int = 512,
                  stop_strings: tuple[str, ...] = ("Observation:",)) -> None:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig

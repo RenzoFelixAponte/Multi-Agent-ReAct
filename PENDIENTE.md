@@ -78,8 +78,8 @@ Con Mistral-7B el multi-agente pierde en *Faithfulness* (0.580 contra 0.663) y *
 - [x] La ejecución de las pruebas por el Auditor cuenta como evidencia (MBPP 25: código correcto con fidelidad 0).
 - [x] Guardar evidencia, traza y rechazos en `EvalRecord`; el juez que falla no debe perder la generación.
 - [x] Reintentos con espera en `NvidiaLLM` (429 y 5xx) y `scripts/rejuzgar.py` para lo que quede sin juzgar.
-- [ ] Orquestador `Qwen/Qwen2.5-7B-Instruct` en 4 bits, juez remoto de NVIDIA y `max_rounds = 5` en MBPP.
-- [ ] Resultados de cada modelo en su carpeta (`results/<modelo>/`), para no saltarse consultas de otra corrida.
+- [x] Orquestador `Qwen/Qwen2.5-7B-Instruct` en 4 bits, juez remoto de NVIDIA y `max_rounds = 5` en MBPP.
+- [x] Resultados de cada modelo en su carpeta (`results/<modelo>/`), para no saltarse consultas de otra corrida.
 - [ ] Prueba de tiempo (`FULL_RUN=0`) y corrida completa en la T4.
 - [ ] Actualizar README, informe y análisis de errores con la corrida 2.
 
