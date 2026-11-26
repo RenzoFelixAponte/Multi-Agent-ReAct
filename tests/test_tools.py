@@ -223,3 +223,15 @@ def test_code_flow_audits_by_execution_and_retries_with_the_error_and_previous_a
     assert "AssertionError" in llm.prompts[1] and "return a - b" in llm.prompts[1]
     item = BenchmarkItem("mbpp", "1", "suma", "", tests=("assert add(1, 2) == 3", "assert add(0, 0) == 0"))
     assert passes_tests(state["final"], item, runner)
+
+
+def test_auditor_execution_becomes_evidence_of_the_approved_answer():
+    # El Investigador escribe el código directo en Final, sin ejecutarlo: lo único que lo respalda
+    # es la ejecución del Auditor, que debe quedar como evidencia para el juez.
+    llm = ScriptedLLM(["Final:\n```python\ndef add(a, b):\n    return a + b\n```"])
+    flow = build_flow(llm, StaticSearch([]), InMemoryKB([]), runner=SubprocessCodeRunner(), task="code")
+    state = flow.invoke({"question": MBPP_QUESTION})
+
+    assert state["verdict"].approved and state["rejections"] == []
+    assert [e.source for e in state["report"].evidence] == ["auditor"]
+    assert "assert add(1, 2) == 3" in state["report"].evidence[0].text

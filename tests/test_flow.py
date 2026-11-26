@@ -64,3 +64,16 @@ def test_investigator_ignores_model_invented_observation():
     assert report.answer == "Lima"
     assert [e.text for e in report.evidence] == ["Lima es la capital del Perú."]
     assert all("dato inventado" not in e.text for e in report.evidence)
+
+
+def test_flow_keeps_every_rejection_and_the_react_trace():
+    llm = ScriptedLLM([
+        "Action: kb[capital Perú]", "Final: Lima", "RECHAZADO: falta fuente web",
+        "Action: web[Lima capital]", "Final: Lima es la capital", "APROBADO", "Lima es la capital del Perú.",
+    ])
+    flow = build_flow(llm, StaticSearch([Evidence("web", "Lima es la capital.")]), InMemoryKB(DOCS))
+    state = flow.invoke({"question": "¿Cuál es la capital del Perú?"})
+
+    assert state["rejections"] == ["falta fuente web"]
+    trace = state["report"].trace
+    assert "Action: web[Lima capital]" in trace and "Observation: [web] Lima es la capital." in trace

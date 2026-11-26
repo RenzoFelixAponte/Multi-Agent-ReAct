@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from application.answer_checks import has_code_block
+from application.language import question_language
 from application.prompts import REDACT_PROMPT, REDACT_RULES
 from domain.report import Report
 from ports.llm_port import LLMPort
@@ -18,5 +19,6 @@ class Redactor:
         if has_code_block(report.answer):
             return report.answer
         return self._llm.complete(
-            REDACT_PROMPT.format(question=report.question, answer=report.answer, format_rule=self._rule)
+            REDACT_PROMPT.format(question=report.question, answer=report.answer, format_rule=self._rule,
+                                 language=question_language(report.question))
         ).strip()

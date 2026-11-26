@@ -18,4 +18,6 @@ class FlowState(TypedDict, total=False):
     verdict: Optional[AuditVerdict]
     feedback: str
     rounds: int
+    # Motivo de cada rechazo del Auditor, en orden. Queda en el estado final para analizar el flujo.
+    rejections: Annotated[list[str], operator.add]
     final: str

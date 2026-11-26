@@ -1,6 +1,8 @@
 """Grafo de control cíclico (LangGraph) que conecta los agentes mediante puertos."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 from langgraph.graph import END, START, StateGraph
 
 from application.auditor import Auditor
@@ -56,7 +58,13 @@ def build_flow(llm: LLMPort, web: WebSearchPort, kb: KnowledgeBasePort, max_roun
         return {"report": report, "rounds": state.get("rounds", 0) + 1}
 
     def audit(state: FlowState) -> dict:
-        return {"verdict": auditor.review(state["report"])}
+        report = state["report"]
+        verdict = auditor.review(report)
+        if not verdict.approved:
+            return {"verdict": verdict, "rejections": [verdict.reason]}
+        if verdict.evidence:  # lo que el Auditor verificó (p. ej. las pruebas ejecutadas) respalda la respuesta
+            report = replace(report, evidence=tuple(dict.fromkeys(report.evidence + verdict.evidence)))
+        return {"verdict": verdict, "report": report}
 
     def feedback(state: FlowState) -> dict:
         # Sin su respuesta anterior, el Investigador empieza de cero y suele repetir el mismo error.

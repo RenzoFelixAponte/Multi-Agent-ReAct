@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from application.answer_checks import extract_code, has_code_block, last_executed_function
 from application.calculator import calculate
 from application.formatting import format_evidence
+from application.language import question_language
 from application.prompts import LAST_STEP_NOTICE, REACT_EXAMPLES, REACT_PROMPT, TOOL_DESCRIPTIONS
 from domain.evidence import Evidence
 from domain.report import Report
@@ -65,11 +66,13 @@ class Investigator:
             scratch = ("Observation (recuperación inicial de kb y web, hecha en paralelo): "
                        f"{format_evidence(prefetched)}\n")
         done: set[tuple[str, str]] = set()
+        language = question_language(question)
         for step in range(self._max_steps):
             last = LAST_STEP_NOTICE if step == self._max_steps - 1 else ""
             raw = self._llm.complete(
                 REACT_PROMPT.format(question=question, feedback=feedback or "ninguna", tools=self._tools,
-                                    example=self._example, scratch=scratch, last_step=last)
+                                    example=self._example, scratch=scratch, last_step=last,
+                                    language=language)
             ).strip()
             # El modelo puede inventar su propia Observation. Solo el sistema escribe observaciones,
             # así que se descarta todo lo que venga después de la primera Observation del modelo.
@@ -81,7 +84,7 @@ class Investigator:
                 final = FINAL_RE.search(out)
                 if final:
                     return Report(question, self._deliverable(final.group(1).strip(), evidence),
-                                  tuple(dict.fromkeys(evidence)))
+                                  tuple(dict.fromkeys(evidence)), trace=scratch)
                 scratch += "Observation: formato no válido. Usa Action o Final.\n"
                 continue
 
@@ -96,7 +99,7 @@ class Investigator:
             evidence.extend(found)
             scratch += f"Observation: {observation}\n"
 
-        return Report(question, "", tuple(dict.fromkeys(evidence)))
+        return Report(question, "", tuple(dict.fromkeys(evidence)), trace=scratch)
 
     def _deliverable(self, answer: str, evidence: list[Evidence]) -> str:
         """Si el modelo dice que su código funciona pero no lo copia en Final, se entrega el código

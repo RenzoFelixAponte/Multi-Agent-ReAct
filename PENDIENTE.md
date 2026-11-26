@@ -66,8 +66,22 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 - [x] Informe final en LaTeX: `informe/` (compila en Overleaf y con tectonic).
   - [x] Poner los nombres de los integrantes y el curso en `informe/main.tex`.
 - [ ] Opcional: ablación del Auditor (`max_rounds=1`) y de `prefetch` (necesita GPU: Colab o la PC con la RTX 5070).
-- [ ] Opcional: guardar la evidencia en `EvalRecord` y volver a juzgar con un juez independiente (`JUDGE_BACKEND = "nvidia"`).
+- [ ] Opcional: guardar la evidencia en `EvalRecord` y volver a juzgar con un juez independiente (`JUDGE_BACKEND = "nvidia"`). Pasa a la corrida 2.
 - [ ] Opcional: `test_runner_limits_memory` falla en macOS (allí no se aplica `RLIMIT_AS`); en Linux y Colab pasa.
+
+## Corrida 2: Qwen2.5-7B y juez independiente
+
+Con Mistral-7B el multi-agente pierde en *Faithfulness* (0.580 contra 0.663) y *Answer Relevance* (0.792 contra 0.911) promediadas sobre las 50. En las 42 consultas que ambos responden gana en las dos (0.691 contra 0.654 y 0.938 contra 0.910): la diferencia la hacen sus 8 abstenciones, que puntúan 0. Además, el juez de 7B da relevancia 1.0 y fidelidad 0.86 a las respuestas incorrectas del multi-agente.
+
+- [x] Idioma explícito en el Investigador, el Redactor y el Naive RAG: 9 de 20 respuestas de WikiQA salieron en español.
+- [x] Guardar la traza ReAct (`Report.trace`) y los motivos de rechazo (`FlowState.rejections`).
+- [x] La ejecución de las pruebas por el Auditor cuenta como evidencia (MBPP 25: código correcto con fidelidad 0).
+- [ ] Guardar evidencia, traza y rechazos en `EvalRecord`; el juez que falla no debe perder la generación.
+- [ ] Reintentos con espera en `NvidiaLLM` (429 y 5xx) y `scripts/rejuzgar.py` para lo que quede sin juzgar.
+- [ ] Orquestador `Qwen/Qwen2.5-7B-Instruct` en 4 bits, juez remoto de NVIDIA y `max_rounds = 5` en MBPP.
+- [ ] Resultados de cada modelo en su carpeta (`results/<modelo>/`), para no saltarse consultas de otra corrida.
+- [ ] Prueba de tiempo (`FULL_RUN=0`) y corrida completa en la T4.
+- [ ] Actualizar README, informe y análisis de errores con la corrida 2.
 
 ## Ya cumple
 

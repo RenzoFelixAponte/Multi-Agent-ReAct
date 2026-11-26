@@ -15,7 +15,7 @@ Ejemplo:
 Reglas:
 - Escribe una sola Action por turno y detente. La Observation la escribe el sistema, nunca tú.
 - Dentro de los corchetes va el texto real que quieres buscar o calcular, no una palabra genérica como "consulta".
-- Escribe las búsquedas y la respuesta Final en el idioma de la pregunta (la base de conocimiento y la web están en inglés).
+- Escribe las búsquedas y la respuesta Final en {language} (la base de conocimiento y la web están en inglés).
 - No repitas una Action que ya hiciste. En cuanto las Observations (o la recuperación inicial) tengan lo necesario, escribe Final.
 - En la respuesta Final usa solo lo que dicen la pregunta y las Observations; no agregues datos que no aparezcan ahí.
 - Si es un problema numérico, razona en el Thought qué representa cada dato y qué pide exactamente la pregunta, calcula con calc y termina con "Respuesta final: <número>". Cuando calc ya dio lo que se pregunta, no operes otra vez sobre ese resultado.
@@ -91,7 +91,8 @@ AUDIT_RULES = {
              "debe mostrar que ese código se ejecutó con sus pruebas; si no, rechaza."),
 }
 
-REDACT_PROMPT = """Eres el Redactor. Reescribe la respuesta verificada de forma clara y breve, en el idioma de la pregunta.
+REDACT_PROMPT = """Eres el Redactor. Reescribe la respuesta verificada de forma clara y breve.
+Escribe en {language}, aunque la respuesta verificada esté en otro idioma.
 No agregues datos, explicaciones ni fuentes que no estén en la respuesta verificada.
 {format_rule}
 Pregunta: {question}
@@ -106,6 +107,7 @@ REDACT_RULES = {
 }
 
 NAIVE_PROMPT = """Responde la pregunta usando el contexto recuperado. Si el contexto no alcanza, razona tú mismo.
+Responde en {language}.
 Si la pregunta es un problema matemático, termina con una línea "Respuesta final: <número>".
 Si la pregunta pide código, entrégalo completo en un bloque ```python.
 Contexto:
