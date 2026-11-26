@@ -64,7 +64,7 @@ Revisión de `indications.md` contra el estado actual del repo. Marcar con `[x]`
 - [x] Análisis de errores consulta por consulta: `docs/analisis_errores.md` y `scripts/analisis_errores.py`.
 - [x] Resultados y conclusiones del README actualizados.
 - [x] Informe final en LaTeX: `informe/` (compila en Overleaf y con tectonic).
-  - [ ] Poner los nombres de los integrantes y el curso en `informe/main.tex` (marcado con `% EDITAR`).
+  - [x] Poner los nombres de los integrantes y el curso en `informe/main.tex`.
 - [ ] Opcional: ablación del Auditor (`max_rounds=1`) y de `prefetch` (necesita GPU: Colab o la PC con la RTX 5070).
 - [ ] Opcional: guardar la evidencia en `EvalRecord` y volver a juzgar con un juez independiente (`JUDGE_BACKEND = "nvidia"`).
 - [ ] Opcional: `test_runner_limits_memory` falla en macOS (allí no se aplica `RLIMIT_AS`); en Linux y Colab pasa.

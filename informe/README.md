@@ -2,7 +2,7 @@
 
 `main.tex` tiene la portada y los paquetes. El contenido está en `secciones/`, un archivo por sección, para que cada integrante pueda editar la suya sin conflictos. `main.pdf` es la última versión compilada.
 
-Antes de entregar, edita en `main.tex` los nombres de los integrantes y el curso. Está marcado con `% EDITAR`.
+La portada (título, integrantes y curso) está en `main.tex`.
 
 ## Compilar
 
