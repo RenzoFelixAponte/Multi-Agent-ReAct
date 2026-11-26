@@ -86,7 +86,7 @@ Con Mistral-7B el multi-agente pierde en *Faithfulness* (0.580 contra 0.663) y *
   - El registro de MBPP 12 (Naive RAG) quedó sin puntaje del juez y se volvió a juzgar con `scripts/rejuzgar.py`: `tabla_comparativa.csv` lo incluye y la tabla del notebook ejecutado no.
 - [ ] GSM8K: el Auditor (LLM) rechaza respuestas correctas. En las consultas 1, 13 y 14 se abstuvo donde el Naive RAG acertó; en la 1 el propio Auditor calcula 3, que es la respuesta correcta, y la rechaza. Propuesta: que el Auditor resuelva el problema por su cuenta y compare el número, y que el Investigador razone paso a paso antes de `calc`. Validar con otras preguntas de GSM8K, no con las 15 del set, para no sobreajustar.
 - [ ] Actualizar README, informe y análisis de errores con la corrida 2.
-- [x] Presentación en LaTeX con la plantilla de Computer Vision (`presentacion/`, 10 diapositivas) y su guion (`presentacion/guion.md`). Falta poner en la diapositiva 9 el resultado de la validación de GSM8K.
+- [x] Presentación en LaTeX con la plantilla de Computer Vision (`presentacion/`, 10 diapositivas) y su guion (`presentacion/guion.md`), combinada con la versión de 18 diapositivas del grupo (commit `dea820f`). Falta poner el resultado de GSM8K.
 
 ## Ya cumple
 
