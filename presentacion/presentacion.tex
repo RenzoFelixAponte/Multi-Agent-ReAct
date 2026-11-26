@@ -62,8 +62,7 @@
 % 2 · el reto y la arquitectura -------------------------------------------------
 \begin{frame}{El reto y nuestra arquitectura}
   % \noindent: un { justo después del título, beamer lo toma como subtítulo
-  \noindent{\small Un LLM de 7B en 4 bits (\textbf{Qwen2.5-7B} en una Tesla T4) que \textbf{no entregue alucinaciones}:
-  tres agentes en un \textbf{grafo cíclico de LangGraph}, con herramientas reales y un Auditor que puede rechazar.\par}
+  \noindent{\small Un modelo de 7B en 4 bits, en una Tesla T4, que \textbf{no entregue alucinaciones}.\par}
   \vspace{5mm}
   \centering
   \begin{tikzpicture}[x=0.83mm, y=1mm]
@@ -89,9 +88,9 @@
   \vspace{5mm}
 
   \begin{columns}[T,onlytextwidth]
-    \begin{column}{0.32\textwidth}\cifra{3 agentes}{con roles separados: buscar, verificar, redactar}\end{column}
-    \begin{column}{0.32\textwidth}\cifra{4 herramientas}{base vectorial, web, calculadora y Python aislado}\end{column}
-    \begin{column}{0.32\textwidth}\cifra{abstenerse}{antes que entregar una respuesta sin respaldo}\end{column}
+    \begin{column}{0.32\textwidth}\cifra{3 agentes}{buscar, verificar, redactar}\end{column}
+    \begin{column}{0.32\textwidth}\cifra{4 herramientas}{ChromaDB, web, calculadora, Python}\end{column}
+    \begin{column}{0.32\textwidth}\cifra{abstenerse}{antes que responder sin respaldo}\end{column}
   \end{columns}
 \end{frame}
 
@@ -107,12 +106,12 @@
       assert remove\_Occ("PHP","P") == "H"};
     \node[traza, text width=37mm, draw=cOurs!60, fill=cOurs!5] (r1) at (0,-31) {%
       \textsf{\footnotesize\bfseries Ronda 1 \textperiodcentered\ \no\ rechazada}\\[1mm]
-      \textsf{\scriptsize El Auditor \textbf{ejecuta} el código con las pruebas:}\\[0.8mm]
+      \textsf{\scriptsize El Auditor \textbf{ejecuta}:}\\[0.8mm]
       assert remove\_Occ("abcda","a") == "bcd"\\
       {\color{cOurs}AssertionError}};
     \node[traza, text width=80mm] (r2) at (45,0) {%
       \textsf{\footnotesize\bfseries Ronda 2 \textperiodcentered\ el error vuelve al Investigador}\\[1mm]
-      \kw{Thought:} The previous solution did not work because it\\ used `replace' \dots{} We need to find the indices of the\\ first and last occurrences \dots\\
+      \kw{Thought:} The previous solution did not work because it\\ used `replace' \dots\\
       \kw{Action:} python[def remove\_Occ(s, ch):\\
       \ \ \ \ first\_index = s.find(ch)\\
       \ \ \ \ last\_index = s.rfind(ch)\\
@@ -125,10 +124,10 @@
       \kw{Thought:} The code passed all the tests \dots\\
       \kw{Final:} \textsf{el mismo código}};
     \node[traza, text width=80mm, draw=cOk!70, fill=cOk!6] (ok) at ([yshift=-2mm]r2.south west) {%
-      \textsf{\footnotesize\bfseries Auditor \textperiodcentered\ \si\ aprobada:} \textsf{\scriptsize las 3 pruebas pasan; el Redactor entrega el código sin reescribirlo}};
+      \textsf{\footnotesize\bfseries Auditor \textperiodcentered\ \si\ aprobada:} \textsf{\scriptsize pasan las 3 pruebas}};
     \draw[ar, draw=cOurs!70] (r1.east) -- ++(4,0) |- ([yshift=-8mm]r2.north west);
   \end{tikzpicture}\\[1mm]
-  {\scriptsize\color{cSrc}Traza real de la corrida, abreviada en «…». El modelo escribe Thought y Action; la Observation la escribe el sistema.\par}
+  {\scriptsize\color{cSrc}Traza real, abreviada. La Observation la escribe el sistema, no el modelo.\par}
 \end{frame}
 
 % 4 · herramientas y datos ------------------------------------------------------------
@@ -136,20 +135,20 @@
   \vspace{2mm}
   {\small
   \renewcommand{\arraystretch}{1.55}
-  \begin{tabular}{@{}>{\raggedright\arraybackslash}m{25mm}>{\raggedright\arraybackslash}m{16mm}>{\raggedright\arraybackslash}m{34mm}>{\raggedright\arraybackslash}m{50mm}@{}}
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}m{30mm}>{\raggedright\arraybackslash}m{20mm}>{\raggedright\arraybackslash}m{28mm}>{\raggedright\arraybackslash}m{48mm}@{}}
     \toprule
     \textcolor{cSrc}{\footnotesize Tarea} & \textcolor{cSrc}{\footnotesize Dataset} & \textcolor{cSrc}{\footnotesize Herramientas} & \textcolor{cSrc}{\footnotesize Cómo verifica el Auditor} \\
     \midrule
-    \tarea{\faQuestionCircle}{Preguntas}{WikiQA}{\texttt{kb} + \texttt{web}, en paralelo al inicio}{el LLM contrasta la respuesta con la evidencia}
-    \tarea{\faCalculator}{Matemáticas}{GSM8K}{\texttt{calc}, calculadora segura}{resuelve el problema por su cuenta y compara el número}
-    \tarea{\faCode}{Código}{MBPP}{\texttt{python}, proceso aislado}{\textbf{ejecuta} el código con los \texttt{assert} del enunciado}
+    \tarea{\faQuestionCircle}{Preguntas}{WikiQA}{\texttt{kb} + \texttt{web}}{contrasta con la evidencia}
+    \tarea{\faCalculator}{Matemáticas}{GSM8K}{\texttt{calc}}{resuelve por su cuenta y compara}
+    \tarea{\faCode}{Código}{MBPP}{\texttt{python} aislado}{\textbf{ejecuta} los \texttt{assert}}
     \bottomrule
   \end{tabular}\par}
   \vspace{7mm}
   \begin{columns}[T,onlytextwidth]
-    \begin{column}{0.32\textwidth}\cifra{1119 frases}{de WikiQA en ChromaDB, también las incorrectas: el Naive RAG no recibe la respuesta servida}\end{column}
-    \begin{column}{0.32\textwidth}\cifra{3 rondas}{máximo por consulta; 5 en MBPP, donde reintentar no deja pasar código erróneo}\end{column}
-    \begin{column}{0.32\textwidth}\cifra{sin web}{en GSM8K y MBPP: podría devolver la solución publicada del benchmark}\end{column}
+    \begin{column}{0.32\textwidth}\cifra{1119 frases}{en ChromaDB, con distractores}\end{column}
+    \begin{column}{0.32\textwidth}\cifra{3 rondas}{como máximo (5 en MBPP)}\end{column}
+    \begin{column}{0.32\textwidth}\cifra{sin web}{en GSM8K y MBPP}\end{column}
   \end{columns}
 \end{frame}
 
@@ -161,24 +160,24 @@
 \begin{frame}{Cómo evaluamos: 50 consultas, dos métodos, un juez}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.5\textwidth}
-      \cab{\textbf{Métricas} \nota{(definiciones de RAGAS, con LLM-as-a-Judge)}}
+      \cab{\textbf{Métricas} \nota{(RAGAS, LLM-as-a-Judge)}}
       \vspace{1mm}
       {\small\textbf{Faithfulness}\par}\vspace{1.2mm}
       \hspace*{5mm}$\dfrac{\text{\footnotesize afirmaciones respaldadas por el contexto}}{\text{\footnotesize afirmaciones de la respuesta}}$\par\vspace{3mm}
       {\small\textbf{Answer Relevance}\par}\vspace{1.2mm}
       \hspace*{5mm}$\dfrac{\text{\footnotesize puntaje del juez, de 0 a 10}}{\text{\footnotesize 10}}$\par\vspace{3mm}
-      {\small\textbf{Verificación objetiva}: número final (GSM8K) y \texttt{assert} ejecutados (MBPP)\par}
+      {\small\textbf{Verificación objetiva} en GSM8K y MBPP\par}
       \vspace{2mm}
-      {\footnotesize\color{cSrc}Una abstención puntúa 0 en las dos métricas del juez.\par}
+      {\footnotesize\color{cSrc}Una abstención vale 0.\par}
     \end{column}
     \begin{column}{0.46\textwidth}
-      \cab{\textbf{Mismas 50 consultas} \nota{20 WikiQA \textperiodcentered\ 15 GSM8K \textperiodcentered\ 15 MBPP}}
+      \cab{\textbf{50 consultas} \nota{20 WikiQA \textperiodcentered\ 15 GSM8K \textperiodcentered\ 15 MBPP}}
       \vspace{2mm}
       \begin{tikzpicture}[x=1mm, y=1mm]
-        \node[agente, text width=52mm, anchor=north west] at (0,0) {\textbf{multi-agente}\\{\scriptsize herramientas, Auditor y hasta 3 rondas}};
-        \node[caja, text width=52mm, anchor=north west, font=\footnotesize, minimum height=9mm] at (0,-13) {\textbf{Naive RAG}\\{\scriptsize 1 recuperación (3 fragmentos) y 1 llamada, sin auditoría}};
-        \node[font=\scriptsize, text=cSrc, anchor=north west, text width=50mm] at (0,-26) {los dos con el mismo \textbf{Qwen2.5-7B} de 4 bits};
-        \node[herramienta, text width=52mm, anchor=north west] at (0,-34) {\faBalanceScale\ \textbf{juez independiente}: Nemotron 120B (API de NVIDIA), el mismo para ambos};
+        \node[agente, text width=52mm, anchor=north west] at (0,0) {\textbf{multi-agente}\\{\scriptsize herramientas + Auditor}};
+        \node[caja, text width=52mm, anchor=north west, font=\footnotesize, minimum height=9mm] at (0,-13) {\textbf{Naive RAG}\\{\scriptsize 1 recuperación + 1 llamada}};
+        \node[font=\scriptsize, text=cSrc, anchor=north west, text width=50mm] at (0,-26) {ambos con \textbf{Qwen2.5-7B} de 4 bits};
+        \node[herramienta, text width=52mm, anchor=north west] at (0,-34) {\faBalanceScale\ \textbf{juez}: Nemotron 120B, independiente};
       \end{tikzpicture}
     \end{column}
   \end{columns}
@@ -198,15 +197,13 @@
       \end{tikzpicture}
     \end{column}
     \begin{column}{0.4\textwidth}
-      \cifra{0.914 vs 0.696}{Faithfulness en las 44 consultas que responden los dos}
+      \cifra{0.914 vs 0.696}{Faithfulness, en las 44 que ambos responden}
       \vspace{3.5mm}
-      \cifra{0.977 vs 0.973}{Answer Relevance en esas mismas 44}
+      \cifra{0.977 vs 0.973}{Answer Relevance, en esas 44}
       \vspace{3.5mm}
-      \cifra{6 de 50}{abstenciones del multi-agente: puntúan 0 y bajan sus promedios}
+      \cifra{6 de 50}{abstenciones (valen 0)}
     \end{column}
   \end{columns}
-  \vspace{2mm}
-  {\footnotesize\color{cSrc}Gana en fidelidad y entrega menos errores. Pierde en relevancia y exactitud por GSM8K (siguiente diapositiva).\par}
 \end{frame}
 
 % 7 · por dataset -------------------------------------------------------------------------
@@ -215,7 +212,7 @@
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.31\textwidth}
       {\color{cAcc}\faQuestionCircle}\ \textbf{WikiQA} {\color{cOk}\faCheck}\par\vspace{3mm}
-      \cifra{0.84 vs 0.66}{Faithfulness: responde con lo que recuperó}
+      \cifra{0.84 vs 0.66}{Faithfulness}
       \vspace{3mm}
       \cifra{0.91 vs 0.90}{Answer Relevance}
     \end{column}
@@ -223,7 +220,7 @@
       {\color{cAcc}\faCalculator}\ \textbf{GSM8K} {\color{cOurs}\faTimes}\par\vspace{3mm}
       \cifra{9 vs 14}{aciertos de 15}
       \vspace{3mm}
-      \cifra{3}{abstenciones con la respuesta correcta en la mano: el Auditor la rechazó}
+      \cifra{3}{respuestas correctas rechazadas}
     \end{column}
     \begin{column}{0.31\textwidth}
       {\color{cAcc}\faCode}\ \textbf{MBPP} {\color{cOk}\faCheck}\par\vspace{3mm}
@@ -233,7 +230,7 @@
     \end{column}
   \end{columns}
   \vspace{6mm}
-  {\footnotesize\color{cSrc}Primero el multi-agente, después el Naive RAG. Qwen2.5-7B, juez Nemotron 120B.\par}
+  {\footnotesize\color{cSrc}multi-agente vs Naive RAG\par}
 \end{frame}
 
 % =============================================================================
@@ -259,13 +256,13 @@
       \end{tabular}\par}
     \end{column}
     \begin{column}{0.38\textwidth}
-      \cifra{0.86 > 0.73}{con Mistral, el juez de 7B daba más fidelidad a las respuestas \textbf{incorrectas} del multi-agente que a las correctas}
+      \cifra{0.86 > 0.73}{juez de 7B: más fidelidad a las respuestas \textbf{incorrectas}}
       \vspace{4mm}
-      \cifra{0.36 < 0.78}{el juez de 120B sí las separa (respuestas del Naive RAG)}
+      \cifra{0.36 < 0.78}{juez de 120B: sí las separa}
     \end{column}
   \end{columns}
   \vspace{4mm}
-  {\footnotesize\color{cSrc}El enunciado exige que el orquestador sea local; el juez no, así que lo hicimos independiente.\par}
+  {\footnotesize\color{cSrc}El orquestador debe ser local; el juez, no.\par}
 \end{frame}
 
 % 9 · un guardrail vale lo que su verificación --------------------------------------------------
@@ -273,9 +270,9 @@
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.47\textwidth}
       {\color{cAcc}\faCode}\ \textbf{MBPP: el Auditor ejecuta}\par\vspace{2mm}
-      \cifra{0}{códigos incorrectos entregados, con los dos modelos}
+      \cifra{0}{códigos incorrectos entregados}
       \vspace{2mm}
-      {\footnotesize En 3 de 15 consultas el error de ejecución volvió al Investigador: corrigió una y se abstuvo en las otras dos, donde el Naive RAG también falló.\par}
+      {\footnotesize El error de ejecución vuelve al Investigador como motivo del rechazo.\par}
     \end{column}
     \begin{column}{0.49\textwidth}
       {\color{cAcc}\faCalculator}\ \textbf{GSM8K: el Auditor opinaba}\par\vspace{2mm}
@@ -284,7 +281,7 @@
           \textsf{\scriptsize Respuesta del Investigador: \textbf{3 bolts} (correcta)}\\[0.8mm]
           \kw{Auditor:} El cálculo no es correcto. \dots\ el total\\ es 2 + 1 = 3 bolts, pero el cálculo debe ser\\ 2 + 2/2 = 3, lo cual es correcto, pero \dots\\ {\color{cOurs}RECHAZADO} \textsf{\scriptsize (3 veces: abstención)}};
       \end{tikzpicture}\par\vspace{2mm}
-      {\footnotesize \textbf{Cambio:} el Auditor resuelve el problema \textbf{sin ver la respuesta} y solo rechaza si los números no coinciden. Validado en 20 problemas que no están en la evaluación.\par}
+      {\footnotesize \textbf{Cambio:} resuelve \textbf{sin ver la respuesta} y compara los números.\par}
     \end{column}
   \end{columns}
 \end{frame}
@@ -296,10 +293,10 @@
 % 10 · lecciones + gracias ------------------------------------------------------------------
 \begin{frame}{Lecciones aprendidas}
   \vspace{2mm}
-  \leccion{0 de 15}{Verificar ejecutando, no opinando: ningún código erróneo pasó al Auditor de MBPP.}
-  \leccion{0.36 vs 0.78}{Un juez débil no distingue una respuesta correcta de una incorrecta: hay que medir con uno independiente.}
-  \leccion{6 de 50}{Abstenerse baja las métricas promediadas, pero evita entregar errores.}
-  \leccion{9 de 20}{El 7B respondía en español a preguntas en inglés: hay que nombrarle el idioma.}
+  \leccion{0 de 15}{Verificar ejecutando, no opinando.}
+  \leccion{0.36 vs 0.78}{Medir con un juez independiente.}
+  \leccion{6 de 50}{Abstenerse baja el promedio, pero evita errores.}
+  \leccion{9 de 20}{Nombrar el idioma: el 7B respondía en español a preguntas en inglés.}
   \vfill
   {\fontsize{16}{19}\selectfont\color{cAcc}¡Gracias!}\ \ \nota{\small ¿Preguntas?}\par
   \vspace{1mm}
