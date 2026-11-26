@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
-from typing import Any
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import replace
+from typing import Any, NamedTuple
 
 from application.answer_checks import numbers_match, passes_tests
 from application.eval_set import eval_question
@@ -21,6 +22,16 @@ MULTIAGENT = "multiagente"
 NAIVE = "naive_rag"
 METHODS = (MULTIAGENT, NAIVE)
 OBJECTIVE_DATASETS = ("gsm8k", "mbpp")  # los que tienen verificación objetiva de la respuesta
+
+
+class Outcome(NamedTuple):
+    """Lo que produjo un método para una consulta, antes de juzgarlo."""
+
+    answer: str
+    evidence: list[Evidence]
+    rounds: int = 1
+    trace: str = ""
+    rejections: tuple[str, ...] = ()
 
 
 class Evaluator:
@@ -52,29 +63,30 @@ class Evaluator:
         start = time.perf_counter()
         base = dict(dataset=item.dataset, item_id=item.item_id, method=method, question=question)
         try:
-            answer, evidence, rounds = self._answer(item, question, method)
-            answered = bool(answer.strip())
+            out = self._answer(item, question, method)
+            seconds = round(time.perf_counter() - start, 2)
+            answered = bool(out.answer.strip())
             if answered:
-                faithfulness = self._judge.faithfulness(answer, evidence, question)
-                relevance = self._judge.relevance(question, answer)
-                correct = self._correct(item, answer)
-            else:  # abstención: el guardrail prefirió no responder, y eso puntúa 0
-                faithfulness = relevance = 0.0
+                correct = self._correct(item, out.answer)
+            else:  # abstención: el guardrail prefirió no responder
                 correct = False if item.dataset in OBJECTIVE_DATASETS else None
-            return EvalRecord(**base, answer=answer, answered=answered, faithfulness=faithfulness,
-                              relevance=relevance, correct=correct, rounds=rounds,
-                              evidence_count=len(evidence), seconds=round(time.perf_counter() - start, 2))
         except Exception as e:  # un fallo aislado (red, memoria) no debe perder el resto de la corrida
             return EvalRecord(**base, error=f"{type(e).__name__}: {e}",
                               seconds=round(time.perf_counter() - start, 2))
+        record = EvalRecord(**base, answer=out.answer, answered=answered, correct=correct, rounds=out.rounds,
+                            evidence_count=len(out.evidence), seconds=seconds,
+                            evidence=[{"source": e.source, "text": e.text} for e in out.evidence],
+                            rejections=list(out.rejections), trace=out.trace)
+        return score(record, self._judge)
 
-    def _answer(self, item: BenchmarkItem, question: str, method: str) -> tuple[str, list[Evidence], int]:
+    def _answer(self, item: BenchmarkItem, question: str, method: str) -> Outcome:
         if method == NAIVE:
             answer, evidence = naive_rag_with_context(question, self._llm, self._kb)
-            return answer, evidence, 1
+            return Outcome(answer, evidence)
         state = self._flows[item.dataset].invoke({"question": question})
         report = state.get("report")
-        return state.get("final", ""), list(report.evidence) if report else [], state.get("rounds", 1)
+        return Outcome(state.get("final", ""), list(report.evidence) if report else [], state.get("rounds", 1),
+                       report.trace if report else "", tuple(state.get("rejections", ())))
 
     def _correct(self, item: BenchmarkItem, answer: str) -> bool | None:
         if item.dataset == "gsm8k":
@@ -82,3 +94,42 @@ class Evaluator:
         if item.dataset == "mbpp" and self._runner is not None:
             return passes_tests(answer, item, self._runner)
         return None
+
+
+def score(record: EvalRecord, judge: Judge) -> EvalRecord:
+    """Pone las métricas del juez. Una abstención puntúa 0 en ambas.
+
+    Si el juez falla (red, cuota), la métrica queda en None y el error en `judge_error`: la respuesta
+    ya generada no se pierde y se puede volver a juzgar con `rejudge`.
+    """
+    if not record.answered:
+        return replace(record, faithfulness=0.0, relevance=0.0, judge_error="")
+    evidence = [Evidence(e["source"], e["text"]) for e in record.evidence]
+    errors: list[str] = []
+
+    def safe(metric, *args):
+        try:
+            return metric(*args)
+        except Exception as e:
+            errors.append(f"{type(e).__name__}: {e}")
+            return None
+
+    return replace(record,
+                   faithfulness=safe(judge.faithfulness, record.answer, evidence, record.question),
+                   relevance=safe(judge.relevance, record.question, record.answer),
+                   judge_error="; ".join(errors))
+
+
+def rejudge(records: Iterable[EvalRecord], judge: Judge, only_missing: bool = True) -> Iterable[EvalRecord]:
+    """Vuelve a juzgar respuestas ya generadas con la evidencia guardada, sin volver a generarlas.
+
+    Con `only_missing`, solo las que quedaron sin puntaje. Se saltan los registros con error y los que
+    tenían evidencia pero no la guardaron (los de la primera corrida). Al agregar los nuevos registros
+    al mismo archivo, `latest` se queda con ellos.
+    """
+    for record in records:
+        if record.error or (record.evidence_count and not record.evidence):
+            continue
+        if only_missing and record.faithfulness is not None and record.relevance is not None:
+            continue
+        yield score(record, judge)

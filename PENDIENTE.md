@@ -76,8 +76,8 @@ Con Mistral-7B el multi-agente pierde en *Faithfulness* (0.580 contra 0.663) y *
 - [x] Idioma explícito en el Investigador, el Redactor y el Naive RAG: 9 de 20 respuestas de WikiQA salieron en español.
 - [x] Guardar la traza ReAct (`Report.trace`) y los motivos de rechazo (`FlowState.rejections`).
 - [x] La ejecución de las pruebas por el Auditor cuenta como evidencia (MBPP 25: código correcto con fidelidad 0).
-- [ ] Guardar evidencia, traza y rechazos en `EvalRecord`; el juez que falla no debe perder la generación.
-- [ ] Reintentos con espera en `NvidiaLLM` (429 y 5xx) y `scripts/rejuzgar.py` para lo que quede sin juzgar.
+- [x] Guardar evidencia, traza y rechazos en `EvalRecord`; el juez que falla no debe perder la generación.
+- [x] Reintentos con espera en `NvidiaLLM` (429 y 5xx) y `scripts/rejuzgar.py` para lo que quede sin juzgar.
 - [ ] Orquestador `Qwen/Qwen2.5-7B-Instruct` en 4 bits, juez remoto de NVIDIA y `max_rounds = 5` en MBPP.
 - [ ] Resultados de cada modelo en su carpeta (`results/<modelo>/`), para no saltarse consultas de otra corrida.
 - [ ] Prueba de tiempo (`FULL_RUN=0`) y corrida completa en la T4.

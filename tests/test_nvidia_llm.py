@@ -64,3 +64,35 @@ def test_http_error_is_wrapped_with_status(monkeypatch):
 
 def test_parse_completion_handles_empty_content():
     assert parse_completion({"choices": [{"message": {"content": None}}]}) == ""
+
+
+def test_complete_retries_rate_limits_and_server_errors(monkeypatch):
+    calls = []
+
+    def fake_urlopen(req, timeout):
+        calls.append(1)
+        if len(calls) < 3:
+            code = 429 if len(calls) == 1 else 503
+            raise urllib.error.HTTPError(req.full_url, code, "busy", {}, io.BytesIO(b"intenta luego"))
+        return _FakeResponse(json.dumps({"choices": [{"message": {"content": "PUNTAJE: 8"}}]}).encode())
+
+    waits = []
+    monkeypatch.setattr(nvidia_llm.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(nvidia_llm.time, "sleep", waits.append)
+    assert NvidiaLLM(api_key="k", model="m").complete("hola") == "PUNTAJE: 8"
+    assert len(calls) == 3 and waits == [5.0, 10.0]
+
+
+def test_complete_gives_up_after_the_last_retry(monkeypatch):
+    def fake_urlopen(req, timeout):
+        raise urllib.error.URLError("sin red")
+
+    monkeypatch.setattr(nvidia_llm.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(nvidia_llm.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="no respondió"):
+        NvidiaLLM(api_key="k", model="m", retries=2).complete("hola")
+
+
+def test_parse_completion_drops_the_think_block():
+    data = {"choices": [{"message": {"content": "<think>SI: no cuenta</think>\nPUNTAJE: 7"}}]}
+    assert parse_completion(data) == "PUNTAJE: 7"

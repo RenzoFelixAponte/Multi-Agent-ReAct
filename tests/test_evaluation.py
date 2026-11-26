@@ -7,8 +7,8 @@ from adapters.in_memory_kb import InMemoryKB
 from adapters.jsonl_result_store import JsonlResultStore
 from adapters.subprocess_code_runner import SubprocessCodeRunner
 from application.eval_set import build_eval_set, eval_question
-from application.eval_summary import summarize
-from application.evaluator import MULTIAGENT, NAIVE, Evaluator
+from application.eval_summary import latest, summarize
+from application.evaluator import MULTIAGENT, NAIVE, Evaluator, rejudge
 from application.judge import Judge, parse_faithfulness, parse_relevance
 from domain.benchmark_item import BenchmarkItem
 from domain.audit_verdict import AuditVerdict
@@ -187,3 +187,63 @@ def test_wrong_delivered_answers_count_apart_from_abstentions():
     assert row["exactitud"] == 0.25
     assert row["exactitud_respondidas"] == pytest.approx(0.333)
     assert row["incorrectas_entregadas"] == 0.5  # la abstención no es una respuesta incorrecta
+
+
+class FlakyJudgeLLM:
+    """LLM del juez que falla como una API caída."""
+
+    def complete(self, prompt: str) -> str:
+        raise RuntimeError("NVIDIA API respondió 503")
+
+
+def test_record_keeps_evidence_trace_and_rejections_of_the_multiagent(tmp_path):
+    class TracedFlow(FakeFlow):
+        def invoke(self, state):
+            out = super().invoke(state)
+            out["report"] = Report(state["question"], self.final, self.evidence, trace="Action: calc[1]")
+            out["rejections"] = ["falta el cálculo"]
+            return out
+
+    llm = ScriptedLLM(["SI: a", "PUNTAJE: 9", "18", "SI: a", "PUNTAJE: 9"])
+    evaluator, store = _evaluator(tmp_path, {"gsm8k": TracedFlow(final="Respuesta final: 18", rounds=2)}, llm)
+    evaluator.run([GSM])
+
+    by_method = {r.method: r for r in store.load()}
+    multi = by_method[MULTIAGENT]
+    assert multi.evidence == [{"source": "calc", "text": "x = 1"}]
+    assert multi.trace == "Action: calc[1]" and multi.rejections == ["falta el cálculo"]
+    assert by_method[NAIVE].evidence == [{"source": e.source, "text": e.text} for e in InMemoryKB(DOCS).retrieve(GSM.question)]
+
+
+def test_a_failing_judge_keeps_the_answer_and_rejudge_fills_the_scores(tmp_path):
+    store = JsonlResultStore(tmp_path / "r.jsonl")
+    answer_llm = ScriptedLLM(["Lima"])
+    evaluator = Evaluator({"wiki_qa": FakeFlow(final="Lima")}, answer_llm, InMemoryKB(DOCS),
+                          Judge(FlakyJudgeLLM()), store)
+    evaluator.run([WIKI])
+
+    records = store.load()
+    assert all(r.answer == "Lima" and not r.error for r in records)
+    assert all(r.faithfulness is None and r.relevance is None and "503" in r.judge_error for r in records)
+
+    judge_llm = ScriptedLLM(["SI: a", "PUNTAJE: 10"] * 2)
+    for record in rejudge(latest(store.load()), Judge(judge_llm)):
+        store.append(record)
+    rescored = latest(store.load())
+    assert all(r.faithfulness == 1.0 and r.relevance == 1.0 and not r.judge_error for r in rescored)
+    assert list(rejudge(rescored, Judge(ScriptedLLM([])))) == []  # ya no falta nada
+
+
+def test_rejudge_skips_records_of_the_first_run_without_saved_evidence():
+    old = EvalRecord("wiki_qa", "Q1", NAIVE, "q", "a", True, None, None, None, 1, 3)
+    assert list(rejudge([old], Judge(ScriptedLLM([])), only_missing=False)) == []
+
+
+def test_store_loads_lines_written_before_the_new_fields(tmp_path):
+    path = tmp_path / "r.jsonl"
+    path.write_text(json.dumps({"dataset": "gsm8k", "item_id": "0", "method": NAIVE, "question": "q",
+                                "answer": "a", "answered": True, "faithfulness": 1.0, "relevance": 1.0,
+                                "correct": True, "rounds": 1, "evidence_count": 3, "seconds": 2.0,
+                                "error": ""}) + "\n", encoding="utf-8")
+    record = JsonlResultStore(path).load()[0]
+    assert record.evidence == [] and record.rejections == [] and record.trace == ""
