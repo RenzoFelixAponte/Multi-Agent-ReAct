@@ -80,7 +80,11 @@ Con Mistral-7B el multi-agente pierde en *Faithfulness* (0.580 contra 0.663) y *
 - [x] Reintentos con espera en `NvidiaLLM` (429 y 5xx) y `scripts/rejuzgar.py` para lo que quede sin juzgar.
 - [x] Orquestador `Qwen/Qwen2.5-7B-Instruct` en 4 bits, juez remoto de NVIDIA y `max_rounds = 5` en MBPP.
 - [x] Resultados de cada modelo en su carpeta (`results/<modelo>/`), para no saltarse consultas de otra corrida.
-- [ ] Prueba de tiempo (`FULL_RUN=0`) y corrida completa en la T4.
+- [x] Prueba de tiempo (`FULL_RUN=0`) y corrida completa en la T4.
+  - Hecho el 26/11/2026: 100 registros en unos 100 min, sin errores. Resultados en `results/qwen2.5-7b-instruct/`.
+  - El multi-agente gana en *Faithfulness* (0.804 contra 0.678) y en respuestas incorrectas entregadas (0.10 contra 0.17), y gana en WikiQA y MBPP. Pierde en *Answer Relevance* (0.860 contra 0.960) y en exactitud (0.733 contra 0.833) por GSM8K: 9/15 contra 14/15.
+  - El registro de MBPP 12 (Naive RAG) quedó sin puntaje del juez y se volvió a juzgar con `scripts/rejuzgar.py`: `tabla_comparativa.csv` lo incluye y la tabla del notebook ejecutado no.
+- [ ] GSM8K: el Auditor (LLM) rechaza respuestas correctas. En las consultas 1, 13 y 14 se abstuvo donde el Naive RAG acertó; en la 1 el propio Auditor calcula 3, que es la respuesta correcta, y la rechaza. Propuesta: que el Auditor resuelva el problema por su cuenta y compare el número, y que el Investigador razone paso a paso antes de `calc`. Validar con otras preguntas de GSM8K, no con las 15 del set, para no sobreajustar.
 - [ ] Actualizar README, informe y análisis de errores con la corrida 2.
 
 ## Ya cumple
