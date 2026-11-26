@@ -16,3 +16,6 @@ chroma_db/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+*.nav
+*.snm
+*.vrb

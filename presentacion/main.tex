@@ -1,0 +1,560 @@
+% Presentación: Sistema Multi-Agente ReAct
+% Compila con pdfLaTeX, XeLaTeX o tectonic (ver presentacion/README.md).
+% El aspecto (colores, letras, cajas) está en tema.tex; aquí solo va el contenido.
+% Cada diapositiva tiene notas del orador en \note{...}: ver README para mostrarlas.
+\documentclass[aspectratio=169,11pt]{beamer}
+\input{tema}
+% Para presentar con las notas del orador en una segunda pantalla, quita el % de la línea siguiente:
+% \setbeameroption{show notes on second screen=right}
+
+\title{Sistema Multi-Agente ReAct}
+\author{Renzo Josimar Felix Aponte \and Jose Eduardo Huamani Ñaupas \and Diego Randolp Quispe Apaza}
+\date{Noviembre de 2026}
+
+\begin{document}
+
+% =====================================================================
+% Portada
+% =====================================================================
+{
+\setbeamercolor{background canvas}{bg=ink}
+\setbeamertemplate{footline}{}
+\begin{frame}[plain]
+  \vskip 9mm
+  {\color{bluelight}\fontsize{7.5}{9}\selectfont\bfseries PROCESAMIENTO DE LENGUAJE NATURAL \textperiodcentered{} PROYECTO FINAL}
+  \vfill
+  {\color{orangelight}\rule{12mm}{0.8mm}}\par
+  \vskip 5mm
+  {\color{paper}\fontsize{32}{34}\selectfont\bfseries Sistema Multi-Agente ReAct\par}
+  \vskip 4mm
+  \begin{minipage}{0.78\textwidth}
+    {\color{mist}\fontsize{13}{17}\selectfont Tres agentes que investigan, auditan y redactan respuestas con un modelo de 7B cuantizado en una GPU T4\par}
+  \end{minipage}
+  \vfill
+  {\color{paper}\fontsize{9.5}{13}\selectfont Renzo Josimar Felix Aponte \textperiodcentered{} Jose Eduardo Huamani Ñaupas \textperiodcentered{} Diego Randolp Quispe Apaza\par}
+  \vskip 1.5mm
+  {\color{dim}\fontsize{8}{10}\selectfont Noviembre de 2026\par}
+  \vskip 6mm
+  \note{Presentarse. Una frase de contexto: construimos un sistema de tres agentes que no solo responde, sino que revisa su propia respuesta antes de entregarla, y lo comparamos contra un RAG de un solo paso. Todo corre con un modelo de 7 mil millones de parámetros en 4 bits, en la T4 gratuita de Colab.}
+\end{frame}
+}
+
+% =====================================================================
+\parte{01 \textperiodcentered{} CONTEXTO}
+% =====================================================================
+
+\begin{frame}{El problema: un 7B responde aunque no sepa}
+  \vskip 4mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.47\textwidth}
+      \vskip 4mm
+      \numero[orange]{21 de 30}\par
+      \vskip 3mm
+      \lead{respuestas incorrectas entregó el Naive RAG en GSM8K y MBPP, en nuestra primera corrida con Mistral-7B.}
+      \vskip 3mm
+      \nota{Las entregó con la misma seguridad que las correctas, sin ninguna señal de que estaban mal.}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \etiqueta{LO QUE BUSCAMOS}
+      \vskip 2mm
+      \begin{tarjeta}\fuerte{Buscar y calcular con herramientas}, en vez de responder de memoria.\end{tarjeta}
+      \vskip 2mm
+      \begin{tarjeta}\fuerte{Revisar cada respuesta} antes de entregarla, con un agente distinto al que la escribió.\end{tarjeta}
+      \vskip 2mm
+      \begin{tarjeta}\fuerte{Si no se puede respaldar, no responder.} Una abstención es mejor que un error.\end{tarjeta}
+    \end{column}
+  \end{columns}
+  \note{El punto de partida. Un modelo de 7B, como los que caben en una T4, responde con mucha seguridad aunque esté equivocado. En nuestra primera corrida, el baseline (un RAG de un solo paso) entregó 21 respuestas incorrectas de 30 que podíamos verificar. Queremos un sistema que use herramientas, que tenga un agente que revise la respuesta antes de que salga y que, si no la puede respaldar, prefiera no responder.}
+\end{frame}
+
+\begin{frame}{Qué pedía el enunciado y cómo lo resolvimos}
+  \vskip 3mm
+  {\fontsize{10.5}{12.5}\selectfont
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.42\textwidth}L@{}}
+    \toprule
+    \textcolor{muted}{\textbf{Requisito}} & \textcolor{muted}{\textbf{Nuestra solución}} \\
+    \midrule
+    Al menos 3 agentes en un grafo cíclico & Investigador, Auditor y Redactor en LangGraph \\
+    Thought $\rightarrow$ Action $\rightarrow$ Observation & Bucle ReAct con \texttt{kb}, \texttt{web}, \texttt{calc} y \texttt{python} \\
+    Base vectorial local & ChromaDB con las frases de WikiQA \\
+    Búsqueda web & DuckDuckGo, sin API key \\
+    Guardrails & El Auditor rechaza con un motivo; tras \textit{N} rechazos, se abstiene \\
+    Concurrencia & \texttt{kb} y \texttt{web} se consultan en paralelo (fan-out) \\
+    LLM de 7--8B en 4 bits en la T4 & Mistral-7B y Qwen2.5-7B, cuantizados en NF4 \\
+    50 consultas contra un Naive RAG & Faithfulness, Answer Relevance y verificación objetiva \\
+    \bottomrule
+  \end{tabularx}}
+  \note{Esta tabla es la lista de lo que pedía el enunciado, y todo está cubierto. Vale la pena mencionar dos cosas: la concurrencia la resolvimos consultando la base vectorial y la web al mismo tiempo, y además de las dos métricas del juez agregamos una verificación objetiva, porque en matemáticas y en código sí se puede saber si la respuesta es correcta.}
+\end{frame}
+
+\begin{frame}{50 consultas de tres datasets de Hugging Face}
+  \vskip 4mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.315\textwidth}
+      \begin{tarjeta}[equal height group=datos]
+        \etiqueta{WIKIQA}\vskip 1.5mm
+        \numerom[blue]{20} {\color{soft}\small consultas}\par\vskip 2mm
+        Preguntas abiertas sobre Wikipedia. La base vectorial guarda 1119 frases, también las incorrectas, para que haya distractores.\par
+        \vskip 2.5mm
+        \nota{\fuerte{Se verifica:} solo con el juez}
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.315\textwidth}
+      \begin{tarjeta}[equal height group=datos]
+        \etiqueta{GSM8K}\vskip 1.5mm
+        \numerom[blue]{15} {\color{soft}\small consultas}\par\vskip 2mm
+        Problemas de matemática de primaria que necesitan varios pasos de razonamiento.\par
+        \vskip 2.5mm
+        \nota{\fuerte{Se verifica:} el número final contra la referencia}
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.315\textwidth}
+      \begin{tarjeta}[equal height group=datos]
+        \etiqueta{MBPP}\vskip 1.5mm
+        \numerom[blue]{15} {\color{soft}\small consultas}\par\vskip 2mm
+        Escribir una función en Python a partir de una descripción y sus pruebas.\par
+        \vskip 2.5mm
+        \nota{\fuerte{Se verifica:} se ejecutan sus \texttt{assert}}
+      \end{tarjeta}
+    \end{column}
+  \end{columns}
+  \note{Usamos los tres datasets que pedía el enunciado. WikiQA sirve como base de conocimiento: indexamos todas las frases candidatas, también las incorrectas, para que la búsqueda no encuentre siempre la respuesta servida, porque eso favorecería al Naive RAG. GSM8K y MBPP tienen una ventaja: se puede comprobar si la respuesta es correcta sin depender de un juez.}
+\end{frame}
+
+% =====================================================================
+\parte{02 \textperiodcentered{} EL SISTEMA}
+% =====================================================================
+
+\begin{frame}{Un grafo cíclico con tres agentes}
+  \vskip 2mm
+  \centering
+  \begin{tikzpicture}[scale=1.25,
+      >={Stealth[length=2.2mm]},
+      box/.style={draw=rule, fill=cardbg, rounded corners=2mm, line width=0.6pt,
+        minimum height=8mm, align=center, inner sep=1.5mm},
+      agente/.style={box, draw=blue, fill=bluesoft, line width=0.9pt, minimum width=24mm, minimum height=10mm},
+      herr/.style={box, fill=paper2, minimum width=20mm},
+      fin/.style={box, draw=orange, fill=orangesoft, line width=0.9pt, minimum width=20mm},
+      t/.style={font=\fontsize{10}{12}\selectfont\bfseries\color{ink}},
+      s/.style={font=\fontsize{8}{10}\selectfont\color{muted}},
+      flecha/.style={->, draw=ink, line width=0.8pt},
+      lbl/.style={font=\fontsize{8}{10}\selectfont\color{muted}},
+    ]
+    \node[box, minimum width=15mm] (q) at (0.75,0) {\textbf{\color{ink}Pregunta}};
+    \node[herr] (kb) at (3.2,1.0) {{\ttfamily\bfseries\color{ink}kb}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}ChromaDB}};
+    \node[herr] (web) at (3.2,-1.0) {{\ttfamily\bfseries\color{ink}web}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}DuckDuckGo}};
+    \node[agente] (inv) at (6.3,0) {{\fontsize{10}{12}\selectfont\bfseries\color{ink}Investigador}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}bucle ReAct}};
+    \node[agente, minimum width=21mm] (aud) at (9.4,0) {{\fontsize{10}{12}\selectfont\bfseries\color{ink}Auditor}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}de Hechos}};
+    \node[agente, minimum width=21mm] (red) at (12.55,0) {{\fontsize{10}{12}\selectfont\bfseries\color{ink}Redactor}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}respuesta final}};
+    \node[herr, minimum width=21mm] (fb) at (9.4,-2.1) {{\fontsize{10}{12}\selectfont\bfseries\color{ink}Reintento}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}con el motivo}};
+    \node[fin, minimum width=21mm] (abs) at (9.4,2.1) {{\fontsize{10}{12}\selectfont\bfseries\color{ink}Abstención}\\[-0.5mm]{\fontsize{8}{10}\selectfont\color{muted}no responde}};
+
+    \draw[flecha] (q.north) |- (kb.west);
+    \draw[flecha] (q.south) |- (web.west);
+    \draw[flecha] (kb.east) -| ([xshift=-4mm]inv.north);
+    \draw[flecha] (web.east) -| ([xshift=-4mm]inv.south);
+    \draw[flecha] (inv) -- (aud);
+    \draw[flecha] (aud) -- node[lbl, above=0.5mm] {aprobado} (red);
+    \draw[flecha] (aud) -- node[lbl, right=0.5mm] {rechazo} (fb);
+    \draw[flecha] (fb.west) -| ([xshift=5mm]inv.south);
+    \draw[flecha] (aud) -- node[lbl, right=0.5mm] {3 rechazos} (abs);
+    \node[lbl] at (3.2,0) {en paralelo};
+  \end{tikzpicture}
+  \par\vskip 4mm
+  \raggedright
+  \nota{Tras 3 rechazos (5 en MBPP), el sistema se abstiene en vez de entregar algo sin respaldo.}
+  \note{Este es el grafo, hecho en LangGraph. La pregunta entra y, en WikiQA, se consulta la base vectorial y la web al mismo tiempo: esa es la parte concurrente. El Investigador arranca con esa evidencia y sigue su bucle ReAct. Su respuesta pasa al Auditor. Si la aprueba, el Redactor la deja en limpio. Si la rechaza, el motivo y la respuesta rechazada vuelven al Investigador para que lo intente otra vez: ese es el ciclo. Si el Auditor rechaza tres veces, el sistema se abstiene. En MBPP permitimos cinco intentos, porque ahí el Auditor ejecuta el código y reintentar no puede colar un error.}
+\end{frame}
+
+\begin{frame}{El Investigador piensa, actúa y observa}
+  \vskip 3mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.37\textwidth}
+      \etiqueta{PREGUNTA \textperiodcentered{} GSM8K \#0}
+      \vskip 2mm
+      {\fontsize{10}{13.5}\selectfont\color{ink}Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers’ market daily for \$2 per fresh duck egg. How much in dollars does she make every day?\par}
+      \vskip 4mm
+      \nota{Solo el sistema escribe la Observation: si el modelo inventa una, se descarta.}
+      \vskip 1.5mm
+      \nota{Si repite una Action, se le pide que escriba Final.}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \nota{Traza real de la corrida con Qwen2.5-7B (los Thought, resumidos)}
+      \vskip 2mm
+      \begin{traza}
+        \tpensar{Thought: She has 16 - 3 - 4 eggs left to sell.}
+        \taccion{Action: calc[16 - 3 - 4]}
+        \tobservar{Observation: 9}
+        \tpensar{Thought: At \$2 per egg, she makes 9 * 2.}
+        \taccion{Action: calc[9 * 2]}
+        \tobservar{Observation: 18}
+        \tfinal{Final: Janet makes 18 dollars every day.}
+      \end{traza}
+      \vskip 2.5mm
+      \nota{Luego el Auditor la aprueba y el Redactor entrega «Respuesta final: \$18». Es correcta.}
+    \end{column}
+  \end{columns}
+  \note{Así se ve el ciclo ReAct en una consulta real. El modelo escribe lo que piensa, elige una acción, en este caso la calculadora, y recibe el resultado. Repite hasta que tiene la respuesta y escribe Final. Dos detalles: la Observation la escribe siempre el sistema, nunca el modelo, porque los 7B tienden a inventarse el resultado de la herramienta; y si el modelo repite la misma acción, le decimos que ya tiene el resultado y que responda. Los Thought están resumidos para que quepan; la traza completa está en los resultados.}
+\end{frame}
+
+\begin{frame}{El Auditor decide si la respuesta sale}
+  \vskip 2mm
+  \lead{Primero aplica reglas fijas: sin respuesta final o sin evidencia, rechaza.}
+  \vskip 4mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.485\textwidth}
+      \begin{tarjetaazul}[equal height group=aud]
+        \etiqueta{MBPP}\vskip 1mm
+        \titulocaja{Verifica ejecutando el código}\vskip 1.5mm
+        Corre el código entregado junto con los \texttt{assert} del enunciado. Si falla, le devuelve el error exacto al Investigador.\par
+        \vskip 2.5mm
+        \fuerte{0 códigos incorrectos aprobados} en las dos corridas.
+      \end{tarjetaazul}
+    \end{column}
+    \begin{column}{0.485\textwidth}
+      \begin{tarjetanaranja}[equal height group=aud]
+        \etiquetanaranja{WIKIQA Y GSM8K}\vskip 1mm
+        \titulocaja{Verifica preguntándole al LLM}\vskip 1.5mm
+        Le pide al mismo modelo que diga si la evidencia respalda la respuesta: «APROBADO» o «RECHAZADO: motivo».\par
+        \vskip 2.5mm
+        \fuerte{Aprueba errores y rechaza aciertos.} Lo vemos más adelante.
+      \end{tarjetanaranja}
+    \end{column}
+  \end{columns}
+  \vskip 4mm
+  \nota{Si rechaza, el motivo y la respuesta rechazada vuelven al Investigador, que lo intenta otra vez.}
+  \note{El Auditor es el guardrail. Primero aplica reglas que no dependen del modelo: si no hay respuesta o no hay evidencia, rechaza. Después hay dos casos muy distintos. En código, el Auditor no le pregunta nada al modelo: ejecuta el código con las pruebas del enunciado. Eso es una verificación real, y en las dos corridas nunca dejó pasar un código incorrecto. En preguntas abiertas y en matemática no hay nada que ejecutar, así que le preguntamos al mismo modelo si la evidencia respalda la respuesta. Como vamos a ver, ese Auditor es mucho más débil.}
+\end{frame}
+
+\begin{frame}{Cada tarea tiene su propio grafo y sus herramientas}
+  \vskip 3mm
+  {\fontsize{10.5}{12.5}\selectfont
+  \begin{tabularx}{\textwidth}{@{}p{0.13\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}L@{}}
+    \toprule
+    \textcolor{muted}{\textbf{Tarea}} & \textcolor{muted}{\textbf{Herramientas}} & \textcolor{muted}{\textbf{Por qué}} \\
+    \midrule
+    WikiQA & \texttt{kb} y \texttt{web}, consultadas en paralelo al inicio & Preguntas abiertas: hace falta buscar en la base y en la web \\ \addlinespace[1.2mm]
+    GSM8K & \texttt{calc}: aritmética sobre el árbol sintáctico, sin \texttt{eval} & El 7B se equivoca al operar de memoria \\ \addlinespace[1.2mm]
+    MBPP & \texttt{python}: proceso aparte, con límite de tiempo, CPU y memoria & Probar el código antes de entregarlo \\
+    \bottomrule
+  \end{tabularx}}
+  \vskip 5mm
+  \begin{franja}
+    \fuerte{GSM8K y MBPP no tienen acceso a la web.} No aporta, y podría devolver la solución publicada del propio benchmark.
+  \end{franja}
+
+  \note{No usamos un solo grafo para todo. Cada tarea tiene sus herramientas. En WikiQA, búsqueda en la base y en la web. En matemática, una calculadora que no usa eval: recorre el árbol sintáctico, así no puede ejecutar nada raro. En código, un proceso aparte con límites. Cada grafo trae además su propio ejemplo resuelto en el prompt y sus reglas para el Auditor y el Redactor. Y a matemática y código les quitamos la web a propósito: buscar el enunciado en internet puede devolver la solución del benchmark, y eso sería hacer trampa.}
+\end{frame}
+
+\begin{frame}{Lo que corregimos al probar en la T4}
+  \vskip 3mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.485\textwidth}
+      \begin{tarjeta}[equal height group=aj1]
+        \titulocaja{Repetía la misma Action en bucle}\vskip 1.5mm
+        $\rightarrow$ Bloqueamos la repetición y el último paso exige escribir Final.
+      \end{tarjeta}
+      \vskip 3mm
+      \begin{tarjeta}[equal height group=aj2]
+        \titulocaja{El Redactor agregaba explicaciones inventadas}\vskip 1.5mm
+        $\rightarrow$ Ahora solo reformula, y el código verificado no lo toca.
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.485\textwidth}
+      \begin{tarjeta}[equal height group=aj1]
+        \titulocaja{Copiaba mal su propio código al responder}\vskip 1.5mm
+        $\rightarrow$ Se entrega el código que realmente se ejecutó.
+      \end{tarjeta}
+      \vskip 3mm
+      \begin{tarjeta}[equal height group=aj2]
+        \titulocaja{Respondía en español a preguntas en inglés}\vskip 1.5mm
+        $\rightarrow$ El prompt indica de forma explícita el idioma de la pregunta.
+      \end{tarjeta}
+    \end{column}
+  \end{columns}
+  \vskip 4mm
+  \nota{Cada uno de estos problemas apareció en una corrida real; ninguno lo anticipamos en el diseño.}
+  \note{Esta diapositiva es la parte más práctica. Cuando corrimos el sistema en la T4 aparecieron problemas que no habíamos previsto. El modelo repetía la misma acción en bucle. Al responder, volvía a escribir su código y lo copiaba mal, así que ahora entregamos el código que de verdad se ejecutó. El Redactor inventaba explicaciones que bajaban la fidelidad. Y respondía en español a preguntas en inglés. Cada arreglo salió de mirar las trazas.}
+\end{frame}
+
+% =====================================================================
+\parte{03 \textperiodcentered{} EVALUACIÓN}
+% =====================================================================
+
+\begin{frame}{Cómo medimos: un juez y una verificación objetiva}
+  \vskip 3mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.485\textwidth}
+      \begin{tarjeta}[equal height group=met]
+        \etiqueta{LAS CALCULA UN JUEZ (LLM), AL ESTILO RAGAS}\vskip 2mm
+        \titulocaja{Faithfulness}\vskip 0.5mm
+        Fracción de afirmaciones de la respuesta que se pueden inferir del contexto.\par
+        \vskip 2.5mm
+        \titulocaja{Answer Relevance}\vskip 0.5mm
+        Qué tan directo responde la pregunta, de 0 a 10. No juzga si es verdad.
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.485\textwidth}
+      \begin{tarjetaazul}[equal height group=met]
+        \etiqueta{VERIFICACIÓN OBJETIVA (GSM8K Y MBPP)}\vskip 2mm
+        \titulocaja{Exactitud}\vskip 0.5mm
+        GSM8K: el número final contra la referencia. MBPP: el código pasa sus \texttt{assert}.\par
+        \vskip 2.5mm
+        \titulocaja{Incorrectas entregadas}\vskip 0.5mm
+        Respuestas entregadas y erróneas. Abstenerse no cuenta como error.
+      \end{tarjetaazul}
+    \end{column}
+  \end{columns}
+  \vskip 4mm
+  \begin{franja}
+    \fuerte{Naive RAG (la línea base):} recupera 3 fragmentos de la misma base y hace una sola llamada al mismo modelo, sin herramientas ni Auditor. Los dos métodos responden las mismas 50 preguntas.
+  \end{franja}
+  \note{Medimos de dos formas. Las dos métricas que pedía el enunciado, al estilo RAGAS, las calcula un LLM que hace de juez: la fidelidad cuenta qué parte de la respuesta se apoya en el contexto, y la relevancia mide si responde lo que se preguntó. Como en matemática y código se puede comprobar la respuesta, agregamos la exactitud y una métrica que nos parece clave: cuántas respuestas incorrectas llegan al usuario. Abstenerse no cuenta como error. La línea base es un RAG de un solo paso con el mismo modelo.}
+\end{frame}
+
+\begin{frame}{Primera corrida: Mistral-7B se juzga a sí mismo}
+  \vskip 3mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.315\textwidth}
+      \begin{tarjeta}[equal height group=c1]
+        \nota{Exactitud (GSM8K + MBPP)}\vskip 2mm
+        \parcifras{0.50}{0.30}
+        \vskip 2.5mm
+        \fuerte{Gana el multi-agente}
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.315\textwidth}
+      \begin{tarjeta}[equal height group=c1]
+        \nota{Incorrectas entregadas}\vskip 2mm
+        \parcifras{7}{21}
+        \vskip 2.5mm
+        \fuerte{Gana el multi-agente}
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.315\textwidth}
+      \begin{tarjeta}[equal height group=c1]
+        \nota{Faithfulness promedio}\vskip 2mm
+        \parcifras{0.58}{0.66}
+        \vskip 2.5mm
+        \fuerte{Gana el Naive RAG}
+      \end{tarjeta}
+    \end{column}
+  \end{columns}
+  \vskip 5mm
+  \begin{franjanaranja}
+    \fuerte{El juez era el mismo Mistral y casi no distinguía:} dio relevancia de 1.00 a las respuestas correctas y de 0.93 a las incorrectas. Además, las 8 abstenciones puntúan 0.
+  \end{franjanaranja}
+  \note{Primera corrida, con Mistral-7B como orquestador y también como juez. En lo que se puede verificar, el multi-agente gana claro: 0.50 contra 0.30 de exactitud y 7 respuestas incorrectas contra 21. Pero en fidelidad pierde. Revisando, encontramos dos razones: las abstenciones puntúan cero, y el juez, que era el mismo Mistral, casi no distinguía una respuesta correcta de una incorrecta. Un juez así no nos servía.}
+\end{frame}
+
+\begin{frame}{Para la segunda corrida cambiamos cuatro cosas}
+  \vskip 3mm
+  {\fontsize{10.5}{12.5}\selectfont
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.44\textwidth}L@{}}
+    \toprule
+    \textcolor{muted}{\textbf{Qué vimos en la corrida 1}} & \textcolor{muted}{\textbf{Qué cambiamos}} \\
+    \midrule
+    El juez era el mismo modelo que respondía & Juez independiente: Nemotron 3.5 Super, de 120B, por la API de NVIDIA \\ \addlinespace[1.2mm]
+    No guardábamos la evidencia ni los rechazos & Cada registro guarda la evidencia, la traza ReAct y los motivos de rechazo \\ \addlinespace[1.2mm]
+    Mistral es un modelo restringido y en GSM8K acertaba 3 de 15 sin herramientas & Orquestador Qwen2.5-7B-Instruct, también en 4 bits en la T4 \\ \addlinespace[1.2mm]
+    En MBPP, 3 rondas se quedaban cortas & 5 rondas en MBPP: ejecutar las pruebas no deja pasar errores \\
+    \bottomrule
+  \end{tabularx}}
+  \vskip 4mm
+  \nota{La segunda corrida también tomó unos 100 minutos en la T4, sin errores.}
+  \note{Con lo que aprendimos, hicimos una segunda corrida. El cambio más importante es el juez: ahora es un modelo de 120B, independiente del que responde. También guardamos la evidencia y la traza de cada consulta, así se puede volver a juzgar sin repetir la generación. Cambiamos el orquestador a Qwen2.5 de 7B, que no es restringido y razona mejor. Y en MBPP subimos a cinco rondas, porque ahí reintentar es seguro.}
+\end{frame}
+
+\begin{frame}{Segunda corrida: Qwen2.5-7B y un juez de 120B}
+  \vskip 2mm
+  {\fontsize{10.5}{12.5}\selectfont
+  \begin{tabularx}{\textwidth}{@{}Lrrr@{}}
+    \toprule
+    \textcolor{muted}{\textbf{Métrica}} & \textcolor{muted}{\textbf{Multi-agente}} & \textcolor{muted}{\textbf{Naive RAG}} & \textcolor{muted}{\textbf{Gana}} \\
+    \midrule
+    Faithfulness & \azul{0.804} & 0.678 & \azul{Multi-agente} \\
+    Faithfulness, solo respondidas & \azul{0.914} & 0.678 & \azul{Multi-agente} \\
+    Answer Relevance & 0.860 & \naranja{0.960} & \naranja{Naive RAG} \\
+    Exactitud (GSM8K + MBPP) & 0.73 (22/30) & \naranja{0.83 (25/30)} & \naranja{Naive RAG} \\
+    Incorrectas entregadas (menor es mejor) & \azul{0.10 (3/30)} & 0.17 (5/30) & \azul{Multi-agente} \\
+    Respondidas & 0.88 & 1.00 & --- \\
+    Segundos por consulta & 58 & \naranja{14} & \naranja{Naive RAG} \\
+    \bottomrule
+  \end{tabularx}}
+  \vskip 3mm
+  \begin{franja}
+    \fuerte{Con el juez de 120B la fidelidad sí separa:} 0.85 en respuestas correctas y 0.54 en incorrectas. Con Mistral como juez, 0.74 y 0.69.
+  \end{franja}
+  \note{Estos son los resultados finales. Con el juez independiente, el multi-agente gana en fidelidad y entrega menos respuestas incorrectas. Pierde en relevancia, en tiempo y, esta vez, en exactitud. Abajo está la razón por la que confiamos más en este juez: ahora sí le da menos fidelidad a las respuestas incorrectas, cosa que el juez de la primera corrida no hacía. En la siguiente diapositiva vemos de dónde sale la pérdida en exactitud.}
+\end{frame}
+
+\begin{frame}{Por dataset: gana en MBPP y WikiQA, pierde en GSM8K}
+  \vskip 1mm
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        name=faith,
+        ybar, bar width=5.5mm, width=0.56\textwidth, height=48mm,
+        ymin=0, ymax=1.12, ytick={0,0.5,1}, ymajorgrids, grid style={rule},
+        axis line style={rule}, tick style={draw=none},
+        symbolic x coords={WikiQA,GSM8K,MBPP}, xtick=data, enlarge x limits=0.25,
+        tick label style={font=\fontsize{8.5}{10}\selectfont\color{soft}},
+        title={\fontsize{10}{12}\selectfont\bfseries\color{ink}Faithfulness},
+        nodes near coords, every node near coord/.append style={font=\fontsize{7.5}{9}\selectfont\color{ink},
+          /pgf/number format/fixed, /pgf/number format/precision=2, /pgf/number format/fixed zerofill},
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=2, draw=none, fill=none,
+          font=\fontsize{8.5}{10}\selectfont\color{soft}, /tikz/every even column/.append style={column sep=5mm}},
+        leyenda cuadrada,
+      ]
+      \addplot[fill=blue, draw=none] coordinates {(WikiQA,0.844) (GSM8K,0.705) (MBPP,0.850)};
+      \addplot[fill=orange, draw=none] coordinates {(WikiQA,0.661) (GSM8K,1.000) (MBPP,0.378)};
+      \legend{Multi-agente, Naive RAG}
+    \end{axis}
+    \begin{axis}[
+        at={($(faith.east)+(9mm,0)$)}, anchor=west,
+        ybar, bar width=5.5mm, width=0.42\textwidth, height=48mm,
+        ymin=0, ymax=1.12, ytick={0,0.5,1}, ymajorgrids, grid style={rule},
+        axis line style={rule}, tick style={draw=none},
+        symbolic x coords={GSM8K,MBPP}, xtick=data, enlarge x limits=0.4,
+        tick label style={font=\fontsize{8.5}{10}\selectfont\color{soft}},
+        title={\fontsize{10}{12}\selectfont\bfseries\color{ink}Exactitud},
+        nodes near coords, every node near coord/.append style={font=\fontsize{7.5}{9}\selectfont\color{ink},
+          /pgf/number format/fixed, /pgf/number format/precision=2, /pgf/number format/fixed zerofill},
+      ]
+      \addplot[fill=blue, draw=none] coordinates {(GSM8K,0.600) (MBPP,0.867)};
+      \addplot[fill=orange, draw=none] coordinates {(GSM8K,0.933) (MBPP,0.733)};
+    \end{axis}
+  \end{tikzpicture}
+  \par\vskip 1mm
+  \raggedright
+  \nota{En GSM8K el Naive RAG acierta 14 de 15: Qwen ya resuelve bien estos problemas sin ayuda. En MBPP, el multi-agente no entregó ningún código incorrecto (el Naive RAG, 4).}
+  \note{Por dataset la historia es más clara. En MBPP gana el multi-agente: más exactitud y ningún código incorrecto, gracias al Auditor que ejecuta las pruebas. En WikiQA gana en fidelidad. En GSM8K pierde: Qwen resuelve casi todos estos problemas sin ayuda, así que el andamiaje no suma, y el Auditor encima estorba. La fidelidad del Naive RAG en GSM8K es 1.0 porque su respuesta repite los datos del enunciado, que cuentan como información dada.}
+\end{frame}
+
+\begin{frame}{Dónde falla: el Auditor rechaza respuestas correctas}
+  \vskip 1mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.43\textwidth}
+      \begin{tarjeta}[equal height group=falla]
+        \etiqueta{GSM8K \#1}\vskip 1.5mm
+        {\color{ink}A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total does it take?\par}
+        \vskip 3mm
+        \nota{El Investigador:}\vskip 0.5mm
+        {\ttfamily\fontsize{9}{12}\selectfont\color{ink}calc[2 + 2/2] $\rightarrow$ 3\par Final: 3 bolts in total.\par}
+        \vskip 2.5mm
+        \fuerte{Es correcta: la respuesta es 3.}
+      \end{tarjeta}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \begin{tarjetanaranja}[equal height group=falla]
+        \etiquetanaranja{EL AUDITOR, RECHAZÁNDOLA TRES VECES}\vskip 1.5mm
+        {\color{ink}\itshape «El cálculo no es correcto. [\dots] el cálculo debe ser 2 + 2/2 = 3, lo cual es correcto, pero la interpretación inicial de la respuesta fue incorrecta.»\par}
+        \vskip 2.5mm
+        \fuerte{Resultado: abstención.} El Naive RAG respondió 3.
+      \end{tarjetanaranja}
+    \end{column}
+  \end{columns}
+  \vskip 3mm
+  \begin{franja}
+    \fuerte{En GSM8K hubo 3 abstenciones donde el Naive RAG acertó, y 3 errores aprobados.} El Auditor lee el razonamiento, pero no lo comprueba.
+  \end{franja}
+  \note{Este es un caso real, y explica la pérdida en GSM8K. El Investigador calcula 2 más 2 entre 2, obtiene 3, y es correcto. El Auditor la rechaza diciendo que el cálculo no es correcto, y en la misma frase dice que el resultado es correcto. Lo hizo tres veces, así que el sistema se abstuvo. En GSM8K pasó en tres consultas que el Naive RAG acertó. Es la misma lección de antes: un Auditor que solo lee el razonamiento no es una verificación real.}
+\end{frame}
+
+% =====================================================================
+\parte{04 \textperiodcentered{} CIERRE}
+% =====================================================================
+
+{
+\setbeamercolor{background canvas}{bg=ink}
+\setbeamertemplate{frametitle}{%
+  \vskip 9mm
+  {\color{orangelight}\fontsize{8}{10}\selectfont\bfseries\ceja}\par
+  \vskip 1.6mm
+  {\color{paper}\fontsize{20}{24}\selectfont\bfseries\insertframetitle}\par
+  \vskip 1mm
+}
+\setbeamertemplate{footline}{%
+  \hbox to \paperwidth{\hspace*{14mm}{\color{dim}\fontsize{6.5}{8}\selectfont Sistema Multi-Agente ReAct}\hfill{\color{dim}\fontsize{6.5}{8}\selectfont\insertframenumber}\hspace*{14mm}}\vskip 5mm}
+\begin{frame}{Lo que aprendimos}
+  \vskip 3mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.485\textwidth}
+      \begin{tarjetaoscura}[equal height group=lec1]
+        {\color{orangelight}\fontsize{10}{12}\selectfont\bfseries 1}\vskip 1mm
+        {\color{paper}\bfseries\fontsize{11}{14}\selectfont Un guardrail vale lo que vale su verificación.\par}\vskip 1mm
+        Ejecutar pruebas funciona. Pedirle al mismo modelo que se revise, no tanto.
+      \end{tarjetaoscura}
+      \vskip 3mm
+      \begin{tarjetaoscura}[equal height group=lec2]
+        {\color{orangelight}\fontsize{10}{12}\selectfont\bfseries 3}\vskip 1mm
+        {\color{paper}\bfseries\fontsize{11}{14}\selectfont El juez cambia la conclusión.\par}\vskip 1mm
+        Un juez independiente hizo que la fidelidad separara respuestas correctas de incorrectas.
+      \end{tarjetaoscura}
+    \end{column}
+    \begin{column}{0.485\textwidth}
+      \begin{tarjetaoscura}[equal height group=lec1]
+        {\color{orangelight}\fontsize{10}{12}\selectfont\bfseries 2}\vskip 1mm
+        {\color{paper}\bfseries\fontsize{11}{14}\selectfont Abstenerse es mejor que equivocarse.\par}\vskip 1mm
+        Pero las métricas que promedian todo lo castigan: hay que medir también los errores entregados.
+      \end{tarjetaoscura}
+      \vskip 3mm
+      \begin{tarjetaoscura}[equal height group=lec2]
+        {\color{orangelight}\fontsize{10}{12}\selectfont\bfseries 4}\vskip 1mm
+        {\color{paper}\bfseries\fontsize{11}{14}\selectfont Más andamiaje no siempre ayuda.\par}\vskip 1mm
+        Con un modelo que ya resuelve la tarea (Qwen en GSM8K), un mal Auditor resta.
+      \end{tarjetaoscura}
+    \end{column}
+  \end{columns}
+  \note{Cuatro lecciones. Uno: un guardrail es tan bueno como la verificación en la que se apoya; ejecutar código funciona, pedirle al modelo que se revise a sí mismo no tanto. Dos: abstenerse es mejor que equivocarse, pero hay que medirlo, porque las métricas promedio lo castigan. Tres: el juez cambia la conclusión; con un juez propio el sistema parecía peor de lo que era. Cuatro: cuando el modelo ya resuelve bien la tarea, más agentes no ayudan si el Auditor no verifica de verdad.}
+\end{frame}
+}
+
+\begin{frame}{Limitaciones y siguientes pasos}
+  \vskip 3mm
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.485\textwidth}
+      \etiquetanaranja{LIMITACIONES}
+      \vskip 2mm
+      {\fontsize{10}{13}\selectfont\color{soft}
+      \begin{itemize}\setlength{\itemsep}{2mm}
+        \item 50 consultas y una corrida por modelo: las diferencias no son significativas (McNemar: \mbox{\textit{p} = 0.11} y 0.51).
+        \item En la segunda corrida cambiaron a la vez el modelo y el juez.
+        \item El multi-agente es de 3 a 4 veces más lento.
+        \item El ejecutor de código no aísla la red ni los archivos: válido en la VM desechable de Colab.
+      \end{itemize}}
+    \end{column}
+    \begin{column}{0.485\textwidth}
+      \etiqueta{SIGUIENTES PASOS}
+      \vskip 2mm
+      {\fontsize{10}{13}\selectfont\color{soft}
+      \begin{itemize}\setlength{\itemsep}{2mm}
+        \item Un Auditor de GSM8K que resuelva el problema por su cuenta y compare el número.
+        \item Ablación: sin Auditor y sin la búsqueda en paralelo, para medir cuánto aporta cada parte.
+        \item Unas 100 consultas verificables, para tener significancia estadística.
+      \end{itemize}}
+    \end{column}
+  \end{columns}
+  \note{Somos honestos con los límites. Con 50 consultas, ninguna diferencia entre métodos es estadísticamente significativa. En la segunda corrida cambiamos dos cosas a la vez, el modelo y el juez, así que no podemos atribuir la mejora a una sola. Y el sistema es más lento. Lo siguiente sería darle al Auditor de matemática una verificación real, hacer una ablación para medir el aporte de cada agente y ampliar el número de consultas.}
+\end{frame}
+
+{
+\setbeamercolor{background canvas}{bg=paper2}
+\setbeamertemplate{footline}{}
+\begin{frame}[plain]
+  \vfill
+  {\color{ink}\fontsize{32}{34}\selectfont\bfseries Gracias\par}
+  \vskip 3mm
+  \lead{¿Preguntas?}
+  \vskip 9mm
+  \etiqueta{CÓDIGO, NOTEBOOK EJECUTADO, RESULTADOS E INFORME}
+  \vskip 1.5mm
+  {\ttfamily\fontsize{11}{14}\selectfont\color{ink}github.com/RenzoFelixAponte/Multi-Agent-ReAct\par}
+  \vfill
+  \nota{Renzo Josimar Felix Aponte \textperiodcentered{} Jose Eduardo Huamani Ñaupas \textperiodcentered{} Diego Randolp Quispe Apaza}
+  \vskip 8mm
+  \note{Cerrar agradeciendo. Todo está en el repositorio: el código, el notebook ejecutado en la T4, los registros de las dos corridas y el informe.}
+\end{frame}
+}
+
+\end{document}
