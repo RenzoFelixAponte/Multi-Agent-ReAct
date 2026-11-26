@@ -197,7 +197,7 @@ def test_investigator_only_offers_the_tools_of_its_task():
     report = Investigator(llm, StaticSearch([]), kb, tools=("calc",), task="math").run("huevos")
 
     assert "kb[" not in llm.prompts[0].split("Ejemplo:")[0]
-    assert "calc[20 - 4*3]" in llm.prompts[0]          # ejemplo resuelto de matemáticas
+    assert "calc[50 - (4*3 + 2*5)]" in llm.prompts[0]  # ejemplo resuelto de matemáticas
     assert "herramienta kb no disponible" in llm.prompts[1]
     assert [e.source for e in report.evidence] == ["calc"]
 
@@ -235,3 +235,56 @@ def test_auditor_execution_becomes_evidence_of_the_approved_answer():
     assert state["verdict"].approved and state["rejections"] == []
     assert [e.source for e in state["report"].evidence] == ["auditor"]
     assert "assert add(1, 2) == 3" in state["report"].evidence[0].text
+
+
+GSM_QUESTION = "Janet has 16 eggs. She eats 3 and bakes with 4. She sells the rest at $2 each. How much does she make?"
+CALC = (Evidence("calc", "(16-3-4)*2 = 18"),)
+
+
+def test_math_auditor_solves_on_its_own_and_approves_when_the_numbers_match():
+    from application.auditor import Auditor
+    from domain.report import Report
+
+    llm = ScriptedLLM(["16 - 3 - 4 = 9 eggs, 9 * 2 = 18.\nRespuesta final: 18"])
+    verdict = Auditor(llm, task="math").review(Report(GSM_QUESTION, "She makes $18.\nRespuesta final: $18", CALC))
+    assert verdict.approved
+    assert GSM_QUESTION in llm.prompts[0] and "$18" not in llm.prompts[0]  # no ve la respuesta del Investigador
+    assert verdict.evidence == ()  # su resolución no cuenta como evidencia
+
+
+def test_math_auditor_rejects_a_mismatch_with_both_numbers_and_solves_only_once():
+    from application.auditor import Auditor
+    from domain.report import Report
+
+    llm = ScriptedLLM(["Respuesta final: 18"])
+    auditor = Auditor(llm, task="math")
+    wrong = auditor.review(Report(GSM_QUESTION, "Respuesta final: 32", CALC))
+    assert not wrong.approved and "18" in wrong.reason and "32" in wrong.reason
+    assert auditor.review(Report(GSM_QUESTION, "Respuesta final: 18", CALC)).approved
+    assert len(llm.prompts) == 1  # la segunda ronda reutiliza su resolución
+
+
+def test_math_auditor_falls_back_to_the_llm_review_when_it_cannot_solve():
+    from application.auditor import Auditor
+    from domain.report import Report
+
+    llm = ScriptedLLM(["no sé resolverlo", "APROBADO"])
+    assert Auditor(llm, task="math").review(Report(GSM_QUESTION, "Respuesta final: 18", CALC)).approved
+    assert "Verifica si la respuesta" in llm.prompts[1]
+
+    no_number = Auditor(ScriptedLLM([]), task="math").review(Report(GSM_QUESTION, "Gana dinero.", CALC))
+    assert not no_number.approved and "Respuesta final" in no_number.reason
+
+
+def test_math_flow_retries_with_the_independent_result_and_approves_the_fix():
+    llm = ScriptedLLM([
+        "Thought: 16 - 3 eggs at $2.\nAction: calc[(16-3)*2]", "Final: She makes $26.\nRespuesta final: 26",
+        "9 eggs at $2.\nRespuesta final: 18",                                   # Auditor, ronda 1
+        "Thought: I forgot the 4 eggs.\nAction: calc[(16-3-4)*2]", "Final: She makes $18.\nRespuesta final: 18",
+        "She makes 18 dollars.\nRespuesta final: 18",                           # Redactor
+    ])
+    flow = build_flow(llm, StaticSearch([]), InMemoryKB([]), task="math")
+    state = flow.invoke({"question": GSM_QUESTION})
+    assert state["verdict"].approved and state["rounds"] == 2
+    assert "da 18 y tu respuesta da 26" in state["rejections"][0]
+    assert "da 18 y tu respuesta da 26" in llm.prompts[3]  # el motivo llega al Investigador

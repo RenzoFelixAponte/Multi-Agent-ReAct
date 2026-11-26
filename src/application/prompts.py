@@ -33,13 +33,15 @@ Observation: [Literature] Gabriel García Márquez wrote One Hundred Years of So
 Thought: The Observation answers the question.
 Final: Gabriel García Márquez wrote One Hundred Years of Solitude."""
 
-_MATH_EXAMPLE = """Pregunta: A shop sells pencils at $3 each. Ana buys 4 pencils and pays with a $20 bill. How much change does she get?
-Thought: 4 pencils at $3 each cost 4*3 dollars, and the change is 20 minus that cost. I compute it in one expression.
-Action: calc[20 - 4*3]
-Observation: 8
-Thought: 8 dollars is the change, which is exactly what the question asks. No more calculations are needed.
-Final: Ana pays 4*3 = 12 dollars, so she gets 20 - 12 = 8 dollars of change.
-Respuesta final: 8"""
+# El ejemplo razona paso a paso antes de calcular: con una sola expresión y sin pasos, Qwen2.5-7B
+# razonaba peor que respondiendo directamente (corrida 2: 9/15 contra 14/15 del Naive RAG).
+_MATH_EXAMPLE = """Pregunta: A shop sells pencils at $3 each and notebooks at $5 each. Ana buys 4 pencils and 2 notebooks and pays with a $50 bill. How much change does she get?
+Thought: Step by step. 1) The pencils cost 4*3 dollars. 2) The notebooks cost 2*5 dollars. 3) The total cost is 1) plus 2). 4) The change is 50 minus the total cost. The question asks for the change, which is step 4, so I compute it in one expression that follows these steps.
+Action: calc[50 - (4*3 + 2*5)]
+Observation: 28
+Thought: 28 dollars is the change, which is exactly what the question asks. No more calculations are needed.
+Final: The pencils cost 4*3 = 12 dollars and the notebooks 2*5 = 10 dollars, so the total is 22 dollars and the change is 50 - 22 = 28 dollars.
+Respuesta final: 28"""
 
 _CODE_EXAMPLE = """Pregunta: Write a function to return the sum of the squares of a list.
 Tu código debe pasar estas pruebas:
@@ -90,6 +92,17 @@ AUDIT_RULES = {
     "code": ("La respuesta debe incluir el código completo en un bloque ```python y la evidencia "
              "debe mostrar que ese código se ejecutó con sus pruebas; si no, rechaza."),
 }
+
+# El Auditor de matemáticas no ve la respuesta del Investigador: la resuelve por su cuenta y después
+# se comparan los números. Pedirle una opinión en texto libre hacía que rechazara respuestas correctas.
+MATH_CHECK_PROMPT = """Eres el Auditor de Hechos. Resuelve tú mismo este problema, sin ayuda de nadie.
+Razona paso a paso: qué representa cada dato, cada cantidad intermedia y qué pide exactamente la pregunta.
+Termina con una línea "Respuesta final: <número>".
+
+Problema: {question}"""
+
+MATH_MISMATCH = ("Un cálculo independiente del Auditor da {check} y tu respuesta da {answer}. Revisa paso a paso "
+                 "qué pide exactamente la pregunta y qué representa cada dato, y vuelve a calcular con calc.")
 
 REDACT_PROMPT = """Eres el Redactor. Reescribe la respuesta verificada de forma clara y breve.
 Escribe en {language}, aunque la respuesta verificada esté en otro idioma.
