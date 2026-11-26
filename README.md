@@ -102,6 +102,8 @@ MODEL_ID=mistralai/Mistral-7B-Instruct-v0.3 JUDGE_BACKEND=same scripts/colab_run
 
 Las keys (`NVIDIA_API_KEY`, `HF_TOKEN`) se toman del entorno o del `.env`. El script crea una sesión con T4, sube `src/`, ejecuta el notebook, baja los resultados a `results/<corrida>/` y cierra la sesión. La salida queda en `notebooks/proyecto2_output.ipynb`.
 
+Si Colab corta la VM, no se pierde lo avanzado: mientras corre, el script baja `evaluacion.jsonl` cada 5 minutos, y al volver a ejecutar el mismo comando sube lo que ya hay en `results/<corrida>/` a la VM nueva y la evaluación continúa desde ahí.
+
 ### Pruebas locales (sin GPU ni red)
 
 ```bash
